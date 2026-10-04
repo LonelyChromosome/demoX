@@ -565,7 +565,7 @@ func _draw_piece(
 
 
 func _identity_color(faction: int, unit_id: String) -> Color:
-	var hash_index := abs(unit_id.hash())
+	var hash_index: int = absi(unit_id.hash())
 	var base: Color = PLAYER_IDENTITY_COLORS[hash_index % PLAYER_IDENTITY_COLORS.size()]
 	if faction == GameEnums.Faction.ENEMY:
 		base = Color("d45b55")
