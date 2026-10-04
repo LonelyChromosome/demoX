@@ -109,18 +109,29 @@ func _plan_move(unit_id: String, target: Vector2i) -> bool:
 
 	var construction_building := turn_manager.get_construction_building_at(target)
 	var job_slot := turn_manager.get_job_slot_at(target)
+	var target_farm := staffing_system.active_farm_at(state, target)
+	var origin_farm := staffing_system.active_farm_at(state, unit.board_cell)
+	var uses_farm_position_role := (
+		target_farm != null or (origin_farm != null and job_slot.is_empty())
+	)
 	turn_manager.queue_move(unit_id, target)
 	if construction_building != null:
 		if not turn_manager.plan_construction_drop(unit_id, target):
 			turn_manager.cancel_move(unit_id)
 			view.flash_invalid_cell(target)
 			return false
-	elif not job_slot.is_empty():
+	elif target_farm != null:
+		if (
+			not unit.work_building_id.is_empty()
+			and unit.work_building_id != target_farm.id
+		):
+			turn_manager.plan_job_drop(unit_id, target)
+	elif not uses_farm_position_role and not job_slot.is_empty():
 		if not turn_manager.plan_job_drop(unit_id, target):
 			turn_manager.cancel_move(unit_id)
 			view.flash_invalid_cell(target)
 			return false
-	else:
+	elif not uses_farm_position_role:
 		turn_manager.plan_job_drop(unit_id, target)
 	_refresh_view()
 	return true
@@ -131,13 +142,21 @@ func _is_free_target(cell: Vector2i, moving_unit_id: String) -> bool:
 	if planned_building != null and planned_building.core_cell == cell:
 		return false
 	if building_system.is_cell_occupied_by_building(state, cell):
-		return false
+		var core_building := building_system.building_at_cell(state, cell)
+		if not _is_active_farm_core(core_building, cell):
+			return false
 	var planned_targets := turn_manager.get_planned_move_targets()
 	for candidate in state.units.values():
 		if not (candidate is UnitState) or candidate.id == moving_unit_id:
 			continue
-		if candidate.board_cell == cell or planned_targets.get(candidate.id) == cell:
+		var candidate_target: Vector2i = planned_targets.get(candidate.id, candidate.board_cell)
+		if candidate_target == cell:
 			return false
+	var farm := staffing_system.active_farm_at(state, cell)
+	if farm != null and not staffing_system.can_plan_farm_move(
+		state, farm, moving_unit_id, cell, planned_targets
+	):
+		return false
 	return true
 
 
@@ -146,6 +165,8 @@ func _normalize_building_drop(target: Vector2i, moving_unit_id: String) -> Vecto
 	if building == null:
 		building = building_system.building_at_cell(state, target)
 	if building == null:
+		return target
+	if _is_active_farm_core(building, target):
 		return target
 	if target != building.core_cell and _is_free_target(target, moving_unit_id):
 		return target
@@ -163,6 +184,17 @@ func _normalize_building_drop(target: Vector2i, moving_unit_id: String) -> Vecto
 		if _is_free_target(candidate, moving_unit_id):
 			return candidate
 	return Vector2i(-1, -1)
+
+
+func _is_active_farm_core(building: BuildingState, cell: Vector2i) -> bool:
+	var demolition := turn_manager.get_planned_demolition()
+	return (
+		building != null
+		and building.type == GameEnums.BuildingType.FARM
+		and building.phase == GameEnums.BuildingPhase.ACTIVE
+		and building.core_cell == cell
+		and (demolition == null or demolition.building_id != building.id)
+	)
 
 
 func _player_unit_at(cell: Vector2i) -> UnitState:
