@@ -21,6 +21,21 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -
 	_refresh_view()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not input_enabled or selected_unit_id.is_empty():
+		return
+
+	var should_clear := false
+	if event is InputEventKey:
+		should_clear = event.pressed and not event.echo and event.keycode == KEY_ESCAPE
+	elif event is InputEventMouseButton:
+		should_clear = event.pressed and event.button_index == MOUSE_BUTTON_RIGHT
+
+	if should_clear:
+		_clear_selection()
+		get_viewport().set_input_as_handled()
+
+
 func _on_cell_pressed(cell: Vector2i) -> void:
 	if not input_enabled:
 		return
@@ -88,10 +103,14 @@ func _player_unit_at(cell: Vector2i) -> UnitState:
 	return null
 
 
-func _on_day_resolved(_day: int) -> void:
+func _clear_selection() -> void:
 	selected_unit_id = ""
 	dragged_unit_id = ""
 	_refresh_view()
+
+
+func _on_day_resolved(_day: int) -> void:
+	_clear_selection()
 
 
 func _refresh_view() -> void:
@@ -102,6 +121,4 @@ func _refresh_view() -> void:
 func set_input_enabled(enabled: bool) -> void:
 	input_enabled = enabled
 	if not enabled:
-		selected_unit_id = ""
-		dragged_unit_id = ""
-		_refresh_view()
+		_clear_selection()
