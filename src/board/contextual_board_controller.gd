@@ -92,15 +92,13 @@ func open_for_cell(cell: Vector2i) -> void:
 		detail += "\nVị trí: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
 	var on_core := current_cell == building.core_cell
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT and on_core:
-		actions["cancel_blueprint"] = "Hủy blueprint"
+		actions["cancel_blueprint"] = "Hủy bản vẽ"
 	elif building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		actions["builder_slot"] = "Đặt ô thợ xây"
-		actions["clear_slot"] = "Xóa job slot"
+		pass
 	elif building.phase == GameEnums.BuildingPhase.BUILDING and on_core:
 		actions["cancel_construction"] = "Hủy xây"
 	elif building.phase == GameEnums.BuildingPhase.BUILDING:
-		actions["builder_slot"] = "Đặt ô thợ xây"
-		actions["clear_slot"] = "Xóa job slot"
+		pass
 	elif building.phase == GameEnums.BuildingPhase.ACTIVE and on_core:
 		var demolition := turn_manager.get_planned_demolition()
 		if demolition != null and demolition.building_id == building.id:
@@ -113,7 +111,7 @@ func open_for_cell(cell: Vector2i) -> void:
 			actions["farm_worker_slot"] = "Đặt ô lao động"
 		elif building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
 			actions["workshop_manager_slot"] = "Đặt ô quản lý xưởng"
-		actions["clear_slot"] = "Xóa job slot"
+		actions["clear_slot"] = "Xóa vị trí công việc"
 	popup.open_at(board.cell_screen_position(cell), _type_name(building.type), detail, actions)
 
 
@@ -171,7 +169,10 @@ func _on_action_confirmed(action: String) -> void:
 			turn_manager.queue_building_plan(BUILD_TYPES[action], current_cell)
 		placement.cancel()
 	elif action == "cancel_blueprint":
-		turn_manager.cancel_building(current_building_id)
+		if state.buildings.has(current_building_id):
+			turn_manager.queue_cancel_construction(current_building_id)
+		else:
+			turn_manager.cancel_building(current_building_id)
 	elif action == "cancel_move":
 		turn_manager.cancel_unit_plan(current_unit_id)
 	elif action == "cancel_construction":
