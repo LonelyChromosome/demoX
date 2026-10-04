@@ -35,25 +35,29 @@ func cancel_refund(type: GameEnums.BuildingType) -> int:
 
 func validate_builders(state: GameState, builder_ids: Array[String]) -> Dictionary:
 	if builder_ids.is_empty():
-		return {"valid": false, "reason": "Cần ít nhất 1 builder"}
+		return {"valid": true, "reason": "Chưa có thợ xây"}
 	var seen := {}
 	for builder_id in builder_ids:
 		if seen.has(builder_id):
-			return {"valid": false, "reason": "Builder bị chọn trùng"}
+			return {"valid": false, "reason": "Thợ xây bị chọn trùng"}
 		seen[builder_id] = true
 		var unit := state.units.get(builder_id) as UnitState
 		if unit == null:
-			return {"valid": false, "reason": "Builder không còn tồn tại"}
+			return {"valid": false, "reason": "Thợ xây không còn tồn tại"}
 		if not unit.can_be_builder():
-			return {"valid": false, "reason": "Builder không hợp lệ hoặc đang bị khóa"}
-	return {"valid": true, "reason": "Builder hợp lệ"}
+			return {"valid": false, "reason": "Thợ xây không hợp lệ hoặc đang bị khóa"}
+	return {"valid": true, "reason": "Thợ xây hợp lệ"}
 
 
 func assign_construction(building: BuildingState, builder_ids: Array[String]) -> void:
 	building.builder_unit_ids = builder_ids.duplicate()
 	building.worker_unit_ids.clear()
-	building.phase = GameEnums.BuildingPhase.BUILDING
-	building.days_left = build_days(building.type, builder_ids.size())
+	building.days_left = build_days(building.type, maxi(builder_ids.size(), 1))
+	building.phase = (
+		GameEnums.BuildingPhase.BUILDING
+		if not builder_ids.is_empty()
+		else GameEnums.BuildingPhase.BLUEPRINT
+	)
 
 
 func advance_construction(state: GameState, skip_ids: Dictionary = {}) -> Array[String]:
@@ -97,28 +101,38 @@ func reassign_builder_to_construction(
 	state: GameState, building_id: String, unit_id: String, slot_cell := Vector2i(-1, -1)
 ) -> Dictionary:
 	var building := state.buildings.get(building_id) as BuildingState
-	if building == null or building.phase != GameEnums.BuildingPhase.BUILDING:
-		return {"valid": false, "reason": "Construction không tồn tại hoặc đã ACTIVE"}
+	if (
+		building == null
+		or building.phase not in [GameEnums.BuildingPhase.BLUEPRINT, GameEnums.BuildingPhase.BUILDING]
+	):
+		return {"valid": false, "reason": "Công trình không tồn tại hoặc đã hoàn thành"}
 	var unit := state.units.get(unit_id) as UnitState
 	if unit == null or not unit.can_be_builder():
-		return {"valid": false, "reason": "Builder không hợp lệ hoặc đang bị khóa"}
+		return {"valid": false, "reason": "Thợ xây không hợp lệ hoặc đang bị khóa"}
 	if building.builder_unit_ids.has(unit_id):
-		return {"valid": false, "reason": "Builder đã được gán"}
+		return {"valid": false, "reason": "Thợ xây đã được phân công"}
 	if slot_cell != Vector2i(-1, -1):
 		if slot_cell == building.core_cell or slot_cell not in footprint(building.core_cell):
-			return {"valid": false, "reason": "Builder phải ở operational cell"}
+			return {"valid": false, "reason": "Thợ xây phải đứng trong vùng vận hành"}
 		if unit.board_cell != slot_cell:
-			return {"valid": false, "reason": "Builder chưa đứng đúng job slot"}
+			return {"valid": false, "reason": "Thợ xây chưa đứng đúng vị trí làm việc"}
+	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
+		building.phase = GameEnums.BuildingPhase.BUILDING
+		if building.days_left <= 0:
+			building.days_left = build_days(building.type, 1)
 	building.builder_unit_ids.append(unit_id)
 	if slot_cell != Vector2i(-1, -1):
 		building.job_slots[slot_cell] = GameEnums.JobRole.BUILDER
 	unit.locked_by_construction = true
 	unit.assigned_building_id = building_id
-	return {"valid": true, "reason": "Builder đã được gán"}
+	return {"valid": true, "reason": "Thợ xây đã được phân công"}
 
 func cancel_construction(state: GameState, building_id: String) -> int:
 	var building := state.buildings.get(building_id) as BuildingState
-	if building == null or building.phase != GameEnums.BuildingPhase.BUILDING:
+	if (
+		building == null
+		or building.phase not in [GameEnums.BuildingPhase.BLUEPRINT, GameEnums.BuildingPhase.BUILDING]
+	):
 		return -1
 	for unit_id in building.builder_unit_ids:
 		var unit := state.units.get(unit_id) as UnitState
@@ -133,9 +147,9 @@ func cancel_construction(state: GameState, building_id: String) -> int:
 func validate_demolition(state: GameState, building_id: String) -> Dictionary:
 	var building := state.buildings.get(building_id) as BuildingState
 	if building == null:
-		return {"valid": false, "reason": "Building không tồn tại"}
+		return {"valid": false, "reason": "Công trình không tồn tại"}
 	if building.phase != GameEnums.BuildingPhase.ACTIVE:
-		return {"valid": false, "reason": "Chỉ được phá building ACTIVE"}
+		return {"valid": false, "reason": "Chỉ được phá công trình đã hoàn thành"}
 	return {"valid": true, "reason": "Có thể phá"}
 
 func start_demolition(state: GameState, building_id: String) -> bool:
@@ -202,10 +216,10 @@ func validate_placement(
 		if not (candidate is UnitState):
 			continue
 		if candidate.board_cell == core_cell:
-			return {"valid": false, "reason": "Core bị quân cờ chiếm"}
+			return {"valid": false, "reason": "Ô lõi đang có quân cờ"}
 	for planned_cell in planned_unit_cells:
 		if planned_cell == core_cell:
-			return {"valid": false, "reason": "Core bị quân cờ dự kiến chiếm"}
+			return {"valid": false, "reason": "Ô lõi đang là đích đến dự kiến của quân cờ"}
 
 	return {"valid": true, "reason": "Vị trí hợp lệ"}
 
