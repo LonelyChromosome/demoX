@@ -99,7 +99,7 @@ func _build_shell() -> void:
 	root.add_child(content)
 
 	board = BoardView.new()
-	board.custom_minimum_size = Vector2(560, 0)
+	board.custom_minimum_size = Vector2(560, 560)
 	board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	board.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(board)
@@ -115,8 +115,7 @@ func _build_shell() -> void:
 		palette_scroll.add_child(building_palette)
 
 	report_panel = ReportPanel.new()
-	report_panel.visible = false
-	content.add_child(report_panel)
+	add_child(report_panel)
 
 	context_popup = ContextPopup.new()
 	add_child(context_popup)
@@ -159,14 +158,9 @@ func _undo_current() -> void:
 
 func _toggle_report() -> void:
 	if report_panel.visible:
-		report_panel.visible = false
+		report_panel.close()
 		return
-	report_panel.visible = true
-	report_panel.modulate.a = 0.0
-	report_panel.position.x += 18.0
-	var tween := create_tween().set_parallel()
-	tween.tween_property(report_panel, "modulate:a", 1.0, 0.16)
-	tween.tween_property(report_panel, "position:x", report_panel.position.x - 18.0, 0.16)
+	report_panel.open_latest()
 
 
 func _end_day() -> void:
@@ -181,12 +175,15 @@ func _on_day_started(_day: int) -> void:
 
 func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	_refresh_header()
-	report_panel.show_result(result)
+	report_panel.show_result(game_state, result)
 	_show_resource_delta(result)
 	if not result.starved_unit_ids.is_empty():
-		status_label.text = "Chết đói: %s" % ", ".join(result.starved_unit_ids)
+		var names: Array[String] = []
+		for unit_id in result.starved_unit_ids:
+			names.append(result.starved_unit_names.get(unit_id, "một quân cờ"))
+		status_label.text = "Chết đói: %s" % ", ".join(names)
 	else:
-		status_label.text = "Đã giải quyết Ngày %02d" % result.resolved_day
+		status_label.text = "Đã giải quyết ngày %02d" % result.resolved_day
 
 
 func _on_ration_requested(result: TurnResolutionResult) -> void:
@@ -223,3 +220,19 @@ func _refresh_header() -> void:
 	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
 	resource_label.text = "   Lương thực %d   ·   Vật tư %d" % [game_state.food, game_state.materials]
 	board.set_day(game_state.day, game_state.day > 1)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey):
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	if key_event.keycode == KEY_F11 or (key_event.alt_pressed and key_event.keycode == KEY_ENTER):
+		var mode := DisplayServer.window_get_mode()
+		DisplayServer.window_set_mode(
+			DisplayServer.WINDOW_MODE_WINDOWED
+			if mode == DisplayServer.WINDOW_MODE_FULLSCREEN
+			else DisplayServer.WINDOW_MODE_FULLSCREEN
+		)
+		get_viewport().set_input_as_handled()
