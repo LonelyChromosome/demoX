@@ -30,6 +30,7 @@ func _ready() -> void:
 	add_child(contextual_controller)
 	contextual_controller.setup(game_state, turn_manager, board, context_popup)
 	board_controller.context_requested.connect(contextual_controller.open_for_cell)
+	board_controller.unit_context_requested.connect(contextual_controller.open_for_unit)
 	board_controller.view_changed.connect(contextual_controller.refresh)
 	board.resolution_animation_finished.connect(_on_resolution_animation_finished)
 	if DEV_MODE:

@@ -23,6 +23,7 @@ var popup: ContextPopup
 var placement := BuildingPlacementState.new()
 var building_system := BuildingSystem.new()
 var current_cell := Vector2i(-1, -1)
+var current_unit_id := ""
 var visual_locked := false
 
 
@@ -44,6 +45,7 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView, m
 func open_for_cell(cell: Vector2i) -> void:
 	if visual_locked or not turn_manager.can_edit_orders():
 		return
+	current_unit_id = ""
 	current_cell = cell
 	var building := _building_at(cell)
 	if building == null:
@@ -84,6 +86,28 @@ func open_for_cell(cell: Vector2i) -> void:
 			actions["workshop_manager_slot"] = "Đặt ô Workshop manager"
 		actions["clear_slot"] = "Xóa job slot"
 	popup.open_at(board.cell_screen_position(cell), _type_name(building.type), detail, actions)
+
+
+func open_for_unit(unit_id: String, cell: Vector2i) -> void:
+	if visual_locked or not turn_manager.can_edit_orders():
+		return
+	var unit := state.units.get(unit_id) as UnitState
+	if unit == null or not turn_manager.has_pending_move(unit_id):
+		return
+	current_unit_id = unit_id
+	current_cell = cell
+	var target := turn_manager.get_planned_move_target(unit_id)
+	var name := unit.display_name if not unit.display_name.is_empty() else unit.id
+	var detail := "Nước đi đã định: %s → %s.\nMuốn đổi vị trí, hủy nước đi trước." % [
+		_cell_name(unit.board_cell),
+		_cell_name(target),
+	]
+	popup.open_at(
+		board.cell_screen_position(cell),
+		name,
+		detail,
+		{"cancel_unit_move": "Hủy nước đi"}
+	)
 
 
 func undo_current() -> bool:
@@ -137,6 +161,12 @@ func _on_action_selected(action: String) -> void:
 
 
 func _on_action_confirmed(action: String) -> void:
+	if action == "cancel_unit_move":
+		if not current_unit_id.is_empty():
+			turn_manager.cancel_unit_plan(current_unit_id)
+		current_unit_id = ""
+		refresh()
+		return
 	if BUILD_TYPES.has(action):
 		_update_build_preview(current_cell)
 		if placement.hover_valid:

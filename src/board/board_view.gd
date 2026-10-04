@@ -59,6 +59,12 @@ var demolition_effects: Dictionary = {}
 var ghost_alpha := 1.0
 var planned_building_alpha := 1.0
 var last_planned_building_id := ""
+var held_unit_id := ""
+var held_pointer_position := Vector2.ZERO
+var held_start_position := Vector2.ZERO
+var held_preview_cell := Vector2i(-1, -1)
+var held_preview_valid := false
+var held_has_moved := false
 
 
 func _ready() -> void:
@@ -114,14 +120,51 @@ func cell_screen_position(cell: Vector2i) -> Vector2:
 	return global_position + geometry.origin + Vector2(cell) * geometry.tile + Vector2(geometry.tile * 0.5, geometry.tile * 0.5)
 
 
+func begin_piece_hold(unit_id: String) -> void:
+	held_unit_id = unit_id
+	held_pointer_position = get_local_mouse_position()
+	held_start_position = held_pointer_position
+	held_preview_cell = Vector2i(-1, -1)
+	held_preview_valid = false
+	held_has_moved = false
+	set_process(true)
+	queue_redraw()
+
+
+func end_piece_hold() -> void:
+	held_unit_id = ""
+	held_preview_cell = Vector2i(-1, -1)
+	held_preview_valid = false
+	held_has_moved = false
+	queue_redraw()
+
+
+func piece_hold_moved() -> bool:
+	return held_has_moved
+
+
+func set_piece_hold_preview(cell: Vector2i, valid: bool) -> void:
+	held_preview_cell = cell
+	held_preview_valid = valid
+	queue_redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
+		if not held_unit_id.is_empty():
+			held_pointer_position = event.position
+			if held_pointer_position.distance_to(held_start_position) >= 6.0:
+				held_has_moved = true
+			queue_redraw()
 		var hover_cell := screen_to_cell(event.position)
 		if is_inside(hover_cell):
 			cell_hovered.emit(hover_cell)
+		else:
+			cell_hovered.emit(Vector2i(-1, -1))
 		return
 
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		held_pointer_position = event.position
 		var cell := screen_to_cell(event.position)
 		if not is_inside(cell):
 			return
@@ -180,7 +223,15 @@ func _process(delta: float) -> void:
 			completion_effects.clear()
 			demolition_effects.clear()
 			resolution_animation_finished.emit()
-	if invalid_flash_left <= 0.0 and movement_effects.is_empty() and death_effects.is_empty() and completion_effects.is_empty() and demolition_effects.is_empty() and selected_unit_id.is_empty():
+	if (
+		invalid_flash_left <= 0.0
+		and movement_effects.is_empty()
+		and death_effects.is_empty()
+		and completion_effects.is_empty()
+		and demolition_effects.is_empty()
+		and selected_unit_id.is_empty()
+		and held_unit_id.is_empty()
+	):
 		set_process(false)
 	queue_redraw()
 
@@ -232,6 +283,10 @@ func _draw() -> void:
 				draw_rect(rect.grow(-5), GOLD, false, 3.0)
 			elif cell == invalid_cell:
 				draw_rect(rect.grow(-4), Color(0.9, 0.18, 0.16, 0.42))
+			if cell == held_preview_cell:
+				var preview_color := Color("61d6a3") if held_preview_valid else Color("e5524d")
+				draw_rect(rect.grow(-7), Color(preview_color.r, preview_color.g, preview_color.b, 0.22))
+				draw_rect(rect.grow(-8), preview_color, false, 3.0)
 
 	_draw_committed_buildings(origin, tile)
 	_draw_planned_building(origin, tile)
@@ -400,6 +455,51 @@ func _draw_units(origin: Vector2, tile: float) -> void:
 		var death: Dictionary = death_effects[unit_id]
 		_draw_piece_at_position(death.rank, death.faction, Vector2(death.cell), origin, tile, 1.0 - t)
 
+	if not held_unit_id.is_empty():
+		_draw_held_piece(origin, tile)
+
+
+func _draw_held_piece(origin: Vector2, tile: float) -> void:
+	var unit := units.get(held_unit_id) as UnitState
+	if unit == null:
+		return
+	var identity := _identity_color(unit.faction, unit.id)
+	var source := origin + Vector2(unit.board_cell) * tile + Vector2.ONE * tile * 0.5
+	draw_dashed_line(
+		source,
+		held_pointer_position,
+		Color(identity.r, identity.g, identity.b, 0.52),
+		2.0,
+		tile * 0.08
+	)
+	var center := held_pointer_position
+	draw_circle(center + Vector2(0, tile * 0.18), tile * 0.30, Color(identity.r, identity.g, identity.b, 0.20))
+	draw_arc(center, tile * 0.38, 0.0, TAU, 48, Color(identity.r, identity.g, identity.b, 0.92), 3.0)
+
+	var glyph: String = PIECE_GLYPHS.get(unit.rank, "♟")
+	var font := get_theme_default_font()
+	var font_size := maxi(38, floori(tile * 0.80))
+	var glyph_size := font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var baseline := center + Vector2(-glyph_size.x * 0.5, glyph_size.y * 0.34)
+	draw_string(
+		font,
+		baseline + Vector2(3, 4),
+		glyph,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		font_size,
+		Color(0, 0, 0, 0.42)
+	)
+	draw_string(
+		font,
+		baseline,
+		glyph,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		font_size,
+		Color(GHOST_TINT.r, GHOST_TINT.g, GHOST_TINT.b, 0.92)
+	)
+
 
 func _draw_piece(
 	unit: UnitState, cell: Vector2i, origin: Vector2, tile: float, ghost: bool
@@ -475,4 +575,8 @@ func _cell_rect(cell: Vector2i, origin: Vector2, tile: float) -> Rect2:
 
 
 func _on_mouse_exited() -> void:
+	if not held_unit_id.is_empty():
+		held_preview_cell = Vector2i(-1, -1)
+		held_preview_valid = false
+		queue_redraw()
 	cell_hovered.emit(Vector2i(-1, -1))

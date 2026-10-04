@@ -37,6 +37,67 @@ func cancel_move(unit_id: String) -> void:
 		order_queue.cancel_move(unit_id)
 
 
+func cancel_unit_plan(unit_id: String) -> void:
+	if not can_edit_orders():
+		return
+	var move := order_queue.get_move(unit_id)
+	if move == null:
+		return
+
+	var target_slot := get_job_slot_at(move.target)
+	if not target_slot.is_empty():
+		var target_building_id: String = target_slot.building_id
+		var target_role: int = target_slot.role
+		if target_role == GameEnums.JobRole.BUILDER:
+			var planned_building := get_planned_building()
+			if planned_building != null and planned_building.id == target_building_id:
+				order_queue.remove_planned_builder(unit_id)
+			else:
+				order_queue.cancel_assign_builder(target_building_id, unit_id)
+		else:
+			var planned_target := get_planned_staffing(target_building_id)
+			if planned_target != null:
+				var target_manager := planned_target.manager_unit_id
+				var target_workers: Array[String] = planned_target.worker_unit_ids.duplicate()
+				if target_manager == unit_id:
+					target_manager = ""
+				target_workers.erase(unit_id)
+				queue_staffing(
+					target_building_id,
+					target_manager,
+					target_workers,
+					planned_target.job_slots
+				)
+
+	# If this move was leaving an authoritative job, restore that job in the
+	# planned staffing snapshot without touching other planned workers.
+	var unit := state.units.get(unit_id) as UnitState
+	if unit != null and not unit.work_building_id.is_empty():
+		var old_building := state.buildings.get(unit.work_building_id) as BuildingState
+		if old_building != null:
+			var planned_old := get_planned_staffing(old_building.id)
+			if planned_old != null:
+				var old_manager := planned_old.manager_unit_id
+				var old_workers: Array[String] = planned_old.worker_unit_ids.duplicate()
+				var old_slots: Dictionary = planned_old.job_slots.duplicate(true)
+				var old_role: int = old_building.job_slots.get(
+					unit.board_cell, GameEnums.JobRole.NONE
+				)
+				if old_role in [GameEnums.JobRole.MANAGER, GameEnums.JobRole.WORKSHOP_MANAGER]:
+					old_manager = unit_id
+					old_workers.erase(unit_id)
+				elif old_role == GameEnums.JobRole.FARM_WORKER:
+					if not old_workers.has(unit_id):
+						old_workers.append(unit_id)
+					if old_manager == unit_id:
+						old_manager = ""
+				if old_role != GameEnums.JobRole.NONE:
+					old_slots[unit.board_cell] = old_role
+				queue_staffing(old_building.id, old_manager, old_workers, old_slots)
+
+	order_queue.cancel_move(unit_id)
+
+
 func queue_building(
 	type: GameEnums.BuildingType, core_cell: Vector2i, builder_ids: Array[String] = []
 ) -> BuildingState:
