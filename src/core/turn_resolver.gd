@@ -3,6 +3,9 @@ extends RefCounted
 
 signal phase_started(phase: Phase)
 
+var food_system := FoodSystem.new()
+var material_system := MaterialSystem.new()
+
 enum Phase {
 	VALIDATE_ORDERS,
 	COMMIT_MOVEMENT,
@@ -190,6 +193,8 @@ func _resolve_systems(
 		skip_ids[building_id] = true
 	result.completed_building_ids = building_system.advance_construction(state, skip_ids)
 	building_system.unlock_builders(state, result.completed_building_ids)
+	food_system.produce(state, result)
+	material_system.produce(state, result)
 
 func _validate_cancel(
 	state: GameState, order: CancelConstructionOrder, result: TurnResolutionResult
