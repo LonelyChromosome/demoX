@@ -26,6 +26,9 @@ var reassigned_builder_ids: Array[String] = []
 var demolishing_building_ids: Array[String] = []
 var demolished_building_ids: Array[String] = []
 var staffing_committed_building_ids: Array[String] = []
+var farm_role_changes: Array[Dictionary] = []
+var building_events: Array[Dictionary] = []
+var starved_unit_names: Dictionary = {}
 var rejected_orders: Array[Dictionary] = []
 
 
