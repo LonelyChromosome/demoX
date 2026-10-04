@@ -80,7 +80,7 @@ func _build_shell() -> void:
 
 	var undo_button := Button.new()
 	undo_button.text = "Đóng / Bỏ chọn"
-	undo_button.tooltip_text = "Đóng panel hoặc bỏ thao tác tạm thời; không hủy planned order"
+	undo_button.tooltip_text = "Đóng bảng hoặc bỏ thao tác tạm thời; không hủy lệnh đã định"
 	undo_button.pressed.connect(_undo_current)
 	top.add_child(undo_button)
 
