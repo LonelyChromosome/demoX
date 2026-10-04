@@ -6,6 +6,9 @@ var next_day := 1
 var phase_trace: Array[int] = []
 var committed_move_ids: Array[String] = []
 var building_committed := false
+var materials_spent := 0
+var new_building_ids: Array[String] = []
+var completed_building_ids: Array[String] = []
 var rejected_orders: Array[Dictionary] = []
 
 

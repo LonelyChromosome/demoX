@@ -6,6 +6,7 @@ func _init() -> void:
 	var turn_manager := TurnManager.new()
 	root.add_child(turn_manager)
 	turn_manager.setup(state)
+	state.materials = 4
 
 	var board := BoardView.new()
 	board.size = Vector2(900, 900)
@@ -24,6 +25,10 @@ func _init() -> void:
 	var king := UnitState.new("king")
 	king.board_cell = Vector2i(4, 7)
 	state.units[king.id] = king
+	var builder := UnitState.new("builder")
+	builder.rank = GameEnums.Rank.ROOK
+	builder.board_cell = Vector2i(7, 0)
+	state.units[builder.id] = builder
 	_check(
 		not system.validate_placement(state, Vector2i(4, 6)).valid,
 		"placement overlapping a chess piece accepted"

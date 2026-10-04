@@ -53,7 +53,7 @@ func _test_building_commit_cancel_and_replace() -> void:
 	manager.end_day()
 	_check(state.buildings.size() == 1, "planned blueprint was not committed")
 	var farm := state.buildings.values()[0] as BuildingState
-	_check(farm.phase == GameEnums.BuildingPhase.BLUEPRINT, "building did not commit as blueprint")
+	_check(farm.phase == GameEnums.BuildingPhase.BUILDING, "building did not enter construction")
 
 	manager.queue_building(GameEnums.BuildingType.PRISON, Vector2i(6, 6))
 	manager.cancel_building()
@@ -133,6 +133,12 @@ func _new_context() -> Dictionary:
 	var manager := TurnManager.new()
 	root.add_child(manager)
 	manager.setup(state)
+	state.materials = 20
+	for index in range(4):
+		var builder := UnitState.new("builder_%d" % index)
+		builder.rank = GameEnums.Rank.ROOK
+		builder.board_cell = Vector2i(index, 0)
+		state.units[builder.id] = builder
 	return {"state": state, "manager": manager}
 
 

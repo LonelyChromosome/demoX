@@ -6,6 +6,7 @@ var hover_core := Vector2i(-1, -1)
 var hover_valid := false
 var hover_reason := ""
 var planned_building: BuildingState
+var planned_builder_ids: Array[String] = []
 
 
 func is_active() -> bool:
@@ -18,6 +19,7 @@ func select(type: GameEnums.BuildingType) -> void:
 	hover_valid = false
 	hover_reason = ""
 	planned_building = null
+	planned_builder_ids.clear()
 
 
 func update_hover(cell: Vector2i, valid: bool, reason := "") -> void:
@@ -28,6 +30,7 @@ func update_hover(cell: Vector2i, valid: bool, reason := "") -> void:
 
 func plan(building: BuildingState) -> void:
 	planned_building = building
+	planned_builder_ids = building.builder_unit_ids.duplicate()
 
 
 func cancel() -> void:
@@ -36,3 +39,4 @@ func cancel() -> void:
 	hover_valid = false
 	hover_reason = ""
 	planned_building = null
+	planned_builder_ids.clear()

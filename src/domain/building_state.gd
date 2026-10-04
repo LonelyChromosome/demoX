@@ -6,6 +6,7 @@ var type: GameEnums.BuildingType = GameEnums.BuildingType.FARM
 var core_cell := Vector2i(-1, -1)
 var phase: GameEnums.BuildingPhase = GameEnums.BuildingPhase.BLUEPRINT
 var days_left := 0
+var builder_unit_ids: Array[String] = []
 
 var manager_unit_id := ""
 var worker_unit_ids: Array[String] = []

@@ -5,23 +5,28 @@ var building_id := ""
 var building_type: GameEnums.BuildingType = GameEnums.BuildingType.FARM
 var core_cell := Vector2i(-1, -1)
 var planned_day := 1
+var builder_unit_ids: Array[String] = []
 
 
 func _init(
 	ordered_building_id := "",
 	type: GameEnums.BuildingType = GameEnums.BuildingType.FARM,
 	cell := Vector2i(-1, -1),
-	day := 1
+	day := 1,
+	builders: Array[String] = []
 ) -> void:
 	building_id = ordered_building_id
 	building_type = type
 	core_cell = cell
 	planned_day = day
+	builder_unit_ids = builders.duplicate()
 
 
 func to_blueprint() -> BuildingState:
-	return BuildingState.new(building_id, building_type, core_cell)
+	var building := BuildingState.new(building_id, building_type, core_cell)
+	building.builder_unit_ids = builder_unit_ids.duplicate()
+	return building
 
 
 func copy() -> PlaceBuildingOrder:
-	return PlaceBuildingOrder.new(building_id, building_type, core_cell, planned_day)
+	return PlaceBuildingOrder.new(building_id, building_type, core_cell, planned_day, builder_unit_ids)

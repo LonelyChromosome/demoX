@@ -10,6 +10,7 @@ var palette: BuildingPalette
 var placement := BuildingPlacementState.new()
 var building_system := BuildingSystem.new()
 var resolving := false
+var selected_builder_ids: Array[String] = []
 
 
 func setup(
@@ -26,7 +27,10 @@ func setup(
 	view.cell_hovered.connect(_on_cell_hovered)
 	view.cell_pressed.connect(_on_cell_pressed)
 	palette.building_selected.connect(select_building)
+	palette.builder_selection_changed.connect(_on_builder_selection_changed)
 	palette.cancel_requested.connect(cancel)
+	palette.set_available_builders(state.units)
+	palette.set_builder_status(0)
 	turn_manager.resolution_started.connect(_on_resolution_started)
 	turn_manager.resolution_finished.connect(_on_resolution_finished)
 	_refresh_view()
@@ -80,9 +84,19 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 		_refresh_view()
 		return
 
-	var blueprint := turn_manager.queue_building(placement.selected_type, cell)
+	var builders := selected_builder_ids
+	if builders.is_empty():
+		builders = turn_manager.get_default_builder_ids()
+	var blueprint := turn_manager.queue_building(placement.selected_type, cell, builders)
+	if blueprint == null:
+		palette.set_status("Không thể lập kế hoạch xây")
+		_refresh_view()
+		return
 	placement.plan(blueprint)
-	palette.set_status("Đã đặt ghost tại %s — End Day để chốt" % _cell_name(cell))
+	palette.set_status(
+		"Đã đặt ghost tại %s — %d builder — End Day để chốt"
+		% [_cell_name(cell), builders.size()]
+	)
 	_refresh_view()
 
 
@@ -95,12 +109,41 @@ func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	placement.cancel()
 	palette.clear_active_type()
 	palette.set_status(
-		"Blueprint đã được chốt vào bàn cờ"
-		if result.building_committed
-		else "Đã kết thúc ngày; không có blueprint được chốt"
+		_building_result_status(result)
 	)
 	placement_mode_changed.emit(false)
 	_refresh_view()
+
+
+func _on_builder_selection_changed(builder_ids: Array[String]) -> void:
+	selected_builder_ids = builder_ids.duplicate()
+	palette.set_builder_status(selected_builder_ids.size())
+	if placement.is_active():
+		palette.set_status("Đã chọn %d builder" % selected_builder_ids.size())
+
+
+func _building_result_status(result: TurnResolutionResult) -> String:
+	var building: BuildingState
+	if not result.new_building_ids.is_empty():
+		building = state.buildings.get(result.new_building_ids[0]) as BuildingState
+	else:
+		for candidate in state.buildings.values():
+			if candidate is BuildingState and candidate.phase == GameEnums.BuildingPhase.BUILDING:
+				building = candidate
+				break
+		if building == null and not result.completed_building_ids.is_empty():
+			building = state.buildings.get(result.completed_building_ids[0]) as BuildingState
+	if building == null:
+		return "Đã kết thúc ngày; build bị từ chối"
+	var phase_name := "ACTIVE" if building.phase == GameEnums.BuildingPhase.ACTIVE else "BUILDING"
+	return "%s — %s — còn %d ngày — %d builder" % [
+		phase_name,
+		_building_name(building.type), building.days_left, building.builder_unit_ids.size()
+	]
+
+
+func _building_name(type: GameEnums.BuildingType) -> String:
+	return ["Farm", "Material Workshop", "Prison", "Infirmary / Y", "Barracks"][type]
 
 
 func _refresh_view() -> void:

@@ -34,10 +34,16 @@ func cancel_move(unit_id: String) -> void:
 		order_queue.cancel_move(unit_id)
 
 
-func queue_building(type: GameEnums.BuildingType, core_cell: Vector2i) -> BuildingState:
+func queue_building(
+	type: GameEnums.BuildingType, core_cell: Vector2i, builder_ids: Array[String] = []
+) -> BuildingState:
 	if not can_edit_orders():
 		return null
-	var order := PlaceBuildingOrder.new(_next_building_id(), type, core_cell, state.day)
+	if builder_ids.is_empty():
+		builder_ids = get_default_builder_ids()
+	var order := PlaceBuildingOrder.new(
+		_next_building_id(), type, core_cell, state.day, builder_ids
+	)
 	order_queue.plan_building(order)
 	return order.to_blueprint()
 
@@ -92,6 +98,15 @@ func get_pending_move_count() -> int:
 func get_planned_building() -> BuildingState:
 	var order := order_queue.get_building()
 	return order.to_blueprint() if order != null else null
+
+
+func get_default_builder_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for candidate in state.units.values():
+		if candidate is UnitState and candidate.can_be_builder():
+			ids.append(candidate.id)
+	ids.sort()
+	return ids.slice(0, 1)
 
 
 func has_pending_orders() -> bool:

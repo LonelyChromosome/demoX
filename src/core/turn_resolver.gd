@@ -29,10 +29,10 @@ func resolve(
 	_commit_moves(state, valid_moves, result)
 
 	_run_phase(Phase.COMMIT_BUILDING_PLACEMENT, result)
-	_commit_building(state, valid_building, result)
+	_commit_building(state, valid_building, building_system, result)
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
-	_resolve_systems(state, result)
+	_resolve_systems(state, building_system, result)
 	_run_phase(Phase.RESOLVE_EVENTS, result)
 	_resolve_events(state, result)
 
@@ -111,6 +111,14 @@ func _validate_building(
 	if state.buildings.has(order.building_id):
 		result.reject("building", order.building_id, "Building id already exists")
 		return null
+	var builders := building_system.validate_builders(state, order.builder_unit_ids)
+	if not builders.valid:
+		result.reject("building", order.building_id, builders.reason)
+		return null
+	var cost := building_system.material_cost(order.building_type)
+	if state.materials < cost:
+		result.reject("building", order.building_id, "Không đủ vật tư")
+		return null
 	return order
 
 
@@ -134,16 +142,35 @@ func _commit_moves(
 
 
 func _commit_building(
-	state: GameState, order: PlaceBuildingOrder, result: TurnResolutionResult
+	state: GameState,
+	order: PlaceBuildingOrder,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
 ) -> void:
 	if order == null:
 		return
-	state.buildings[order.building_id] = order.to_blueprint()
+	var building := order.to_blueprint()
+	building_system.assign_construction(building, order.builder_unit_ids)
+	state.buildings[order.building_id] = building
+	state.materials -= building_system.material_cost(order.building_type)
+	result.materials_spent += building_system.material_cost(order.building_type)
+	result.new_building_ids.append(order.building_id)
+	for builder_id in order.builder_unit_ids:
+		var builder := state.units.get(builder_id) as UnitState
+		if builder != null:
+			builder.assigned_building_id = order.building_id
+			builder.locked_by_construction = true
 	result.building_committed = true
 
 
-func _resolve_systems(_state: GameState, _result: TurnResolutionResult) -> void:
-	pass
+func _resolve_systems(
+	state: GameState, building_system: BuildingSystem, result: TurnResolutionResult
+) -> void:
+	var skip_ids := {}
+	for building_id in result.new_building_ids:
+		skip_ids[building_id] = true
+	result.completed_building_ids = building_system.advance_construction(state, skip_ids)
+	building_system.unlock_builders(state, result.completed_building_ids)
 
 
 func _resolve_events(_state: GameState, _result: TurnResolutionResult) -> void:
