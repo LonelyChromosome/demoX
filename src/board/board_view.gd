@@ -34,11 +34,11 @@ const PIECE_GLYPHS := {
 }
 
 const BUILDING_LABELS := {
-	GameEnums.BuildingType.FARM: "F",
-	GameEnums.BuildingType.MATERIAL_WORKSHOP: "M",
-	GameEnums.BuildingType.PRISON: "P",
+	GameEnums.BuildingType.FARM: "N",
+	GameEnums.BuildingType.MATERIAL_WORKSHOP: "X",
+	GameEnums.BuildingType.PRISON: "G",
 	GameEnums.BuildingType.INFIRMARY: "Y",
-	GameEnums.BuildingType.BARRACKS: "B",
+	GameEnums.BuildingType.BARRACKS: "D",
 }
 
 const BUILDING_COLORS := {
@@ -395,7 +395,7 @@ func _draw_building(building: BuildingState, origin: Vector2, tile: float, ghost
 		var area_alpha := (0.06 * planned_building_alpha) if ghost else 0.045
 		draw_rect(rect, Color(color.r, color.g, color.b, area_alpha))
 		draw_rect(rect, Color(color.r, color.g, color.b, 0.32 if ghost else 0.2), false, 1.0)
-	_draw_core_marker(building.core_cell, building.type, origin, tile, color)
+	_draw_core_marker(building, origin, tile, color, ghost)
 	var core_rect := _cell_rect(building.core_cell, origin, tile).grow(-tile * 0.25)
 	if building.phase == GameEnums.BuildingPhase.BUILDING:
 		draw_line(core_rect.position, core_rect.end, Color(1, 1, 1, 0.42), 2.0)
@@ -430,19 +430,75 @@ func _draw_placement_preview(origin: Vector2, tile: float) -> void:
 
 
 func _draw_core_marker(
-	cell: Vector2i, type: GameEnums.BuildingType, origin: Vector2, tile: float, color: Color
+	building: BuildingState,
+	origin: Vector2,
+	tile: float,
+	color: Color,
+	ghost: bool
 ) -> void:
-	var rect := _cell_rect(cell, origin, tile).grow(-tile * 0.22)
-	draw_rect(rect, Color(color.r, color.g, color.b, 0.88 * color.a))
-	var border := GOLD
-	border.a = color.a
-	draw_rect(rect, border, false, 2.0)
-	var label: String = BUILDING_LABELS.get(type, "?")
+	var rect := _cell_rect(building.core_cell, origin, tile).grow(-tile * 0.14)
+	var shadow_rect := rect
+	shadow_rect.position += Vector2(4, 5)
+	var shadow_alpha := 0.12 if ghost else 0.28
+	draw_rect(shadow_rect, Color(0, 0, 0, shadow_alpha))
+
+	var fill_alpha := 0.30 if ghost else 0.92
+	draw_rect(rect, Color(color.r, color.g, color.b, fill_alpha * color.a))
+
+	var border := _progress_color(GOLD, 0.5)
+	border.a = 0.55 if ghost else 0.95
+	draw_rect(rect, border, false, 3.0 if not ghost else 2.0)
+
+	var inner := rect.grow(-4.0)
+	draw_rect(inner, Color(1, 1, 1, 0.10 if not ghost else 0.05), false, 1.0)
+
+	var label: String = BUILDING_LABELS.get(building.type, "?")
 	var font := get_theme_default_font()
-	var font_size := maxi(16, floori(tile * 0.3))
+	var font_size := maxi(20, floori(tile * 0.34))
 	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	var baseline := rect.get_center() + Vector2(-text_size.x * 0.5, text_size.y * 0.34)
-	draw_string(font, baseline, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1, 1, 1, color.a))
+	var baseline := rect.get_center() + Vector2(-text_size.x * 0.5, text_size.y * 0.18)
+	draw_string(
+		font,
+		baseline,
+		label,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		font_size,
+		Color(1, 1, 1, 0.92 if not ghost else 0.62)
+	)
+
+	var phase_text := ""
+	if ghost or building.phase == GameEnums.BuildingPhase.BLUEPRINT:
+		phase_text = "DỰ KIẾN"
+	elif building.phase == GameEnums.BuildingPhase.BUILDING:
+		phase_text = "ĐANG XÂY"
+	elif building.phase == GameEnums.BuildingPhase.ACTIVE:
+		phase_text = "HOẠT ĐỘNG"
+	elif building.phase == GameEnums.BuildingPhase.DEMOLISHING:
+		phase_text = "ĐANG PHÁ"
+
+	var phase_font_size := maxi(9, floori(tile * 0.11))
+	var phase_width := font.get_string_size(
+		phase_text, HORIZONTAL_ALIGNMENT_LEFT, -1, phase_font_size
+	).x
+	var phase_pos := Vector2(
+		rect.get_center().x - phase_width * 0.5,
+		rect.end.y - 5.0
+	)
+	draw_string(
+		font,
+		phase_pos,
+		phase_text,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		phase_font_size,
+		Color(1, 1, 1, 0.82 if not ghost else 0.52)
+	)
+
+	if building.phase == GameEnums.BuildingPhase.ACTIVE and not ghost:
+		var badge_center := rect.position + Vector2(rect.size.x - 8.0, 8.0)
+		draw_circle(badge_center, 5.0, Color("79d8a5"))
+		draw_arc(badge_center, 5.0, 0.0, TAU, 18, Color(1, 1, 1, 0.72), 1.2)
 
 
 func _draw_coordinates(origin: Vector2, tile: float, board_px: float) -> void:
