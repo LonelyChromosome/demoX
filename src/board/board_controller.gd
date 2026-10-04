@@ -8,6 +8,8 @@ var view: BoardView
 var selected_unit_id := ""
 var dragged_unit_id := ""
 var input_enabled := true
+var resolving := false
+var building_system := BuildingSystem.new()
 
 
 func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -> void:
@@ -18,6 +20,8 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -
 	view.cell_pressed.connect(_on_cell_pressed)
 	view.cell_released.connect(_on_cell_released)
 	turn_manager.day_resolved.connect(_on_day_resolved)
+	turn_manager.resolution_started.connect(_on_resolution_started)
+	turn_manager.resolution_finished.connect(_on_resolution_finished)
 	_refresh_view()
 
 
@@ -37,10 +41,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_cell_pressed(cell: Vector2i) -> void:
-	if not input_enabled:
+	if not _can_accept_input():
 		return
 	var unit := _player_unit_at(cell)
 	if unit != null:
+		if unit.id == selected_unit_id and turn_manager.has_pending_move(unit.id):
+			turn_manager.cancel_move(unit.id)
 		selected_unit_id = unit.id
 		dragged_unit_id = unit.id
 		_refresh_view()
@@ -51,7 +57,7 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 
 
 func _on_cell_released(cell: Vector2i) -> void:
-	if not input_enabled:
+	if not _can_accept_input():
 		dragged_unit_id = ""
 		return
 	if dragged_unit_id.is_empty():
@@ -65,12 +71,16 @@ func _on_cell_released(cell: Vector2i) -> void:
 
 func _plan_move(unit_id: String, target: Vector2i) -> void:
 	var unit := state.units.get(unit_id) as UnitState
-	if unit == null or not unit.can_be_moved() or not view.is_inside(target):
+	if (
+		unit == null
+		or not unit.can_be_moved()
+		or not view.is_inside(target)
+		or not turn_manager.can_edit_orders()
+	):
 		return
 
 	if target == unit.board_cell:
 		turn_manager.cancel_move(unit_id)
-		unit.planned_cell = Vector2i(-1, -1)
 		_refresh_view()
 		return
 
@@ -78,16 +88,18 @@ func _plan_move(unit_id: String, target: Vector2i) -> void:
 		view.flash_invalid_cell(target)
 		return
 
-	unit.planned_cell = target
 	turn_manager.queue_move(unit_id, target)
 	_refresh_view()
 
 
 func _is_free_target(cell: Vector2i, moving_unit_id: String) -> bool:
+	if building_system.is_cell_occupied_by_building(state, cell):
+		return false
+	var planned_targets := turn_manager.get_planned_move_targets()
 	for candidate in state.units.values():
 		if not (candidate is UnitState) or candidate.id == moving_unit_id:
 			continue
-		if candidate.board_cell == cell or candidate.planned_cell == cell:
+		if candidate.board_cell == cell or planned_targets.get(candidate.id) == cell:
 			return false
 	return true
 
@@ -107,10 +119,8 @@ func undo_current() -> bool:
 	if selected_unit_id.is_empty():
 		return false
 
-	var unit := state.units.get(selected_unit_id) as UnitState
-	if unit != null and unit.planned_cell != Vector2i(-1, -1):
-		turn_manager.cancel_move(unit.id)
-		unit.planned_cell = Vector2i(-1, -1)
+	if turn_manager.has_pending_move(selected_unit_id):
+		turn_manager.cancel_move(selected_unit_id)
 
 	_clear_selection()
 	return true
@@ -128,10 +138,24 @@ func _on_day_resolved(_day: int) -> void:
 
 func _refresh_view() -> void:
 	if view != null:
-		view.present(state.units, selected_unit_id)
+		view.present(state.units, selected_unit_id, turn_manager.get_planned_move_targets())
 
 
 func set_input_enabled(enabled: bool) -> void:
 	input_enabled = enabled
 	if not enabled:
 		_clear_selection()
+
+
+func _can_accept_input() -> bool:
+	return input_enabled and not resolving and turn_manager.can_edit_orders()
+
+
+func _on_resolution_started() -> void:
+	resolving = true
+	dragged_unit_id = ""
+
+
+func _on_resolution_finished(_result: TurnResolutionResult) -> void:
+	resolving = false
+	_refresh_view()
