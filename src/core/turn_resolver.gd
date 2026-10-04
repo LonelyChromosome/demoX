@@ -60,13 +60,13 @@ func resolve(
 	_run_phase(Phase.FOOD_CONSUMPTION, result)
 	if not food_system.resolve_consumption(state, result, building_system):
 		return result
-	_finish_resolution(state, building_system, result)
+	_finish_resolution(state, snapshot, building_system, result)
 	return result
 
 
 func resume_after_ration(
 	state: GameState,
-	_snapshot: PendingOrderSnapshot,
+	snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult,
 	fed_unit_ids: Array[String]
@@ -75,12 +75,13 @@ func resume_after_ration(
 		return result
 	if not food_system.apply_ration(state, result, fed_unit_ids, building_system):
 		return result
-	_finish_resolution(state, building_system, result)
+	_finish_resolution(state, snapshot, building_system, result)
 	return result
 
 
 func _finish_resolution(
 	state: GameState,
+	snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
@@ -302,6 +303,12 @@ func _commit_building(
 	state.materials -= building_system.material_cost(order.building_type)
 	result.materials_spent += building_system.material_cost(order.building_type)
 	result.new_building_ids.append(order.building_id)
+	result.building_events.append({
+		"kind": "construction_started" if not order.builder_unit_ids.is_empty() else "blueprint_placed",
+		"building_id": building.id,
+		"type": building.type,
+		"core": building.core_cell,
+	})
 	for builder_id in order.builder_unit_ids:
 		var builder := state.units.get(builder_id) as UnitState
 		if builder != null:
@@ -320,6 +327,16 @@ func _resolve_systems(
 		skip_ids[building_id] = true
 	result.completed_building_ids = building_system.advance_construction(state, skip_ids)
 	building_system.unlock_builders(state, result.completed_building_ids)
+	for building_id in result.completed_building_ids:
+		var completed := state.buildings.get(building_id) as BuildingState
+		if completed != null:
+			result.building_events.append({
+				"kind": "completed",
+				"building_id": completed.id,
+				"type": completed.type,
+				"core": completed.core_cell,
+			})
+	staffing_system.sync_active_farms_from_positions(state, result)
 	food_system.produce(state, result)
 	material_system.produce(state, result)
 
@@ -345,12 +362,23 @@ func _commit_cancel(
 ) -> void:
 	if order == null:
 		return
+	var building := state.buildings.get(order.building_id) as BuildingState
+	var event := {}
+	if building != null:
+		event = {
+			"kind": "cancelled",
+			"building_id": building.id,
+			"type": building.type,
+			"core": building.core_cell,
+		}
 	var refund := building_system.cancel_construction(state, order.building_id)
 	if refund < 0:
 		result.reject("cancel_construction", order.building_id, "Trạng thái xây dựng đã thay đổi")
 		return
 	result.cancelled_building_ids.append(order.building_id)
 	result.refunded_materials += refund
+	if not event.is_empty():
+		result.building_events.append(event)
 
 func _commit_reassignments(
 	state: GameState,
@@ -362,6 +390,10 @@ func _commit_reassignments(
 		if result.cancelled_building_ids.has(order.building_id):
 			result.reject("assign_builder", order.unit_id, "Công trình đã bị hủy trong ngày này")
 			continue
+		var building := state.buildings.get(order.building_id) as BuildingState
+		var was_blueprint := (
+			building != null and building.phase == GameEnums.BuildingPhase.BLUEPRINT
+		)
 		var assignment := building_system.reassign_builder_to_construction(
 			state, order.building_id, order.unit_id, order.slot_cell
 		)
@@ -369,6 +401,13 @@ func _commit_reassignments(
 			result.reject("assign_builder", order.unit_id, assignment.reason)
 		else:
 			result.reassigned_builder_ids.append(order.unit_id)
+			if was_blueprint and building != null:
+				result.building_events.append({
+					"kind": "construction_started",
+					"building_id": building.id,
+					"type": building.type,
+					"core": building.core_cell,
+				})
 
 func _commit_builder_removals(
 	state: GameState,
@@ -419,6 +458,14 @@ func _finalize_demolition(
 	state: GameState, building_system: BuildingSystem, result: TurnResolutionResult
 ) -> void:
 	for building_id in result.demolishing_building_ids:
+		var building := state.buildings.get(building_id) as BuildingState
+		if building != null:
+			result.building_events.append({
+				"kind": "demolished",
+				"building_id": building.id,
+				"type": building.type,
+				"core": building.core_cell,
+			})
 		if building_system.finalize_demolition(state, building_id):
 			result.demolished_building_ids.append(building_id)
 
