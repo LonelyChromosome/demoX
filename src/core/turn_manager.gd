@@ -299,13 +299,20 @@ func submit_ration(fed_unit_ids: Array[String]) -> TurnResolutionResult:
 	)
 	if result.awaiting_ration:
 		ration_requested.emit(result)
+		return result
+	_complete_resolution(result)
+	return result
+
+
+func _complete_resolution(result: TurnResolutionResult) -> void:
 	order_queue.clear()
+	_pending_snapshot = null
+	_pending_result = null
 	is_resolving = false
 	day_resolved.emit(result.resolved_day)
 	if result.next_day > result.resolved_day:
 		day_started.emit(result.next_day)
 	resolution_finished.emit(result)
-	return result
 
 
 func can_edit_orders() -> bool:
