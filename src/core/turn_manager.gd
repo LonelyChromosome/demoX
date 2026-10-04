@@ -49,7 +49,7 @@ func cancel_unit_plan(unit_id: String) -> void:
 		var target_building_id: String = target_slot.building_id
 		var target_role: int = target_slot.role
 		if target_role == GameEnums.JobRole.BUILDER:
-			var planned_building := get_planned_building()
+			var planned_building := get_planned_building(target_building_id)
 			if planned_building != null and planned_building.id == target_building_id:
 				order_queue.remove_planned_builder(unit_id)
 			else:
