@@ -4,6 +4,8 @@ extends VBoxContainer
 signal building_selected(type: GameEnums.BuildingType)
 signal cancel_requested
 signal builder_selection_changed(builder_ids: Array[String])
+signal cancel_construction_requested
+signal reassign_builder_requested
 
 const BUILDINGS := [
 	["Farm", GameEnums.BuildingType.FARM],
@@ -53,6 +55,14 @@ func _ready() -> void:
 	cancel_button.text = "Cancel planned building"
 	cancel_button.pressed.connect(func() -> void: cancel_requested.emit())
 	add_child(cancel_button)
+	var cancel_construction_button := Button.new()
+	cancel_construction_button.text = "Hủy xây hiện tại"
+	cancel_construction_button.pressed.connect(func() -> void: cancel_construction_requested.emit())
+	add_child(cancel_construction_button)
+	var reassign_button := Button.new()
+	reassign_button.text = "Gán builder đã chọn"
+	reassign_button.pressed.connect(func() -> void: reassign_builder_requested.emit())
+	add_child(reassign_button)
 
 	status_label = Label.new()
 	status_label.text = "Chọn một loại công trình"

@@ -7,6 +7,7 @@ enum Phase {
 	VALIDATE_ORDERS,
 	COMMIT_MOVEMENT,
 	COMMIT_BUILDING_PLACEMENT,
+	COMMIT_CANCEL_CONSTRUCTION,
 	RESOLVE_SYSTEMS,
 	RESOLVE_EVENTS,
 	FINALIZE_DAY,
@@ -24,12 +25,17 @@ func resolve(
 	var valid_building := _validate_building(
 		state, snapshot.building_order, valid_moves, building_system, result
 	)
+	var valid_cancel := _validate_cancel(state, snapshot.cancel_construction_order, result)
 
 	_run_phase(Phase.COMMIT_MOVEMENT, result)
 	_commit_moves(state, valid_moves, result)
 
 	_run_phase(Phase.COMMIT_BUILDING_PLACEMENT, result)
 	_commit_building(state, valid_building, building_system, result)
+
+	_run_phase(Phase.COMMIT_CANCEL_CONSTRUCTION, result)
+	_commit_cancel(state, valid_cancel, building_system, result)
+	_commit_reassignments(state, snapshot.assign_builder_orders, building_system, result)
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
@@ -169,8 +175,57 @@ func _resolve_systems(
 	var skip_ids := {}
 	for building_id in result.new_building_ids:
 		skip_ids[building_id] = true
+	for building_id in result.cancelled_building_ids:
+		skip_ids[building_id] = true
 	result.completed_building_ids = building_system.advance_construction(state, skip_ids)
 	building_system.unlock_builders(state, result.completed_building_ids)
+
+func _validate_cancel(
+	state: GameState, order: CancelConstructionOrder, result: TurnResolutionResult
+) -> CancelConstructionOrder:
+	if order == null:
+		return null
+	var building := state.buildings.get(order.building_id) as BuildingState
+	if building == null:
+		result.reject("cancel_construction", order.building_id, "Building không tồn tại")
+		return null
+	if building.phase != GameEnums.BuildingPhase.BUILDING:
+		result.reject("cancel_construction", order.building_id, "Chỉ được hủy BUILDING")
+		return null
+	return order
+
+func _commit_cancel(
+	state: GameState,
+	order: CancelConstructionOrder,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> void:
+	if order == null:
+		return
+	var refund := building_system.cancel_construction(state, order.building_id)
+	if refund < 0:
+		result.reject("cancel_construction", order.building_id, "Construction đã thay đổi")
+		return
+	result.cancelled_building_ids.append(order.building_id)
+	result.refunded_materials += refund
+
+func _commit_reassignments(
+	state: GameState,
+	orders: Array[AssignBuilderOrder],
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> void:
+	for order in orders:
+		if result.cancelled_building_ids.has(order.building_id):
+			result.reject("assign_builder", order.unit_id, "Building đã bị hủy trong turn")
+			continue
+		var assignment := building_system.reassign_builder_to_construction(
+			state, order.building_id, order.unit_id
+		)
+		if not assignment.valid:
+			result.reject("assign_builder", order.unit_id, assignment.reason)
+		else:
+			result.reassigned_builder_ids.append(order.unit_id)
 
 
 func _resolve_events(_state: GameState, _result: TurnResolutionResult) -> void:

@@ -29,6 +29,9 @@ func build_days(type: GameEnums.BuildingType, builder_count: int) -> int:
 func material_cost(type: GameEnums.BuildingType) -> int:
 	return MATERIAL_COST.get(type, 1)
 
+func cancel_refund(type: GameEnums.BuildingType) -> int:
+	return floori(float(material_cost(type)) * 0.5)
+
 
 func validate_builders(state: GameState, builder_ids: Array[String]) -> Dictionary:
 	if builder_ids.is_empty():
@@ -58,7 +61,11 @@ func advance_construction(state: GameState, skip_ids: Dictionary = {}) -> Array[
 	for candidate in state.buildings.values():
 		if not (candidate is BuildingState):
 			continue
-		if candidate.phase != GameEnums.BuildingPhase.BUILDING or skip_ids.has(candidate.id):
+		if (
+			candidate.phase != GameEnums.BuildingPhase.BUILDING
+			or skip_ids.has(candidate.id)
+			or candidate.builder_unit_ids.is_empty()
+		):
 			continue
 		candidate.days_left -= 1
 		if candidate.days_left <= 0:
@@ -66,6 +73,57 @@ func advance_construction(state: GameState, skip_ids: Dictionary = {}) -> Array[
 			candidate.phase = GameEnums.BuildingPhase.ACTIVE
 			completed.append(candidate.id)
 	return completed
+
+func remove_builder_from_construction(
+	state: GameState, building_id: String, unit_id: String
+) -> bool:
+	var building := state.buildings.get(building_id) as BuildingState
+	if building == null or building.phase != GameEnums.BuildingPhase.BUILDING:
+		return false
+	var index := building.builder_unit_ids.find(unit_id)
+	if index < 0:
+		return false
+	var had_one := building.builder_unit_ids.size() == 1
+	building.builder_unit_ids.remove_at(index)
+	building.worker_unit_ids.erase(unit_id)
+	var unit := state.units.get(unit_id) as UnitState
+	if unit != null:
+		unit.locked_by_construction = false
+		unit.assigned_building_id = ""
+	if had_one:
+		building.days_left = build_days(building.type, 1)
+	return true
+
+func reassign_builder_to_construction(
+	state: GameState, building_id: String, unit_id: String
+) -> Dictionary:
+	var building := state.buildings.get(building_id) as BuildingState
+	if building == null or building.phase != GameEnums.BuildingPhase.BUILDING:
+		return {"valid": false, "reason": "Construction không tồn tại hoặc đã ACTIVE"}
+	var unit := state.units.get(unit_id) as UnitState
+	if unit == null or not unit.can_be_builder():
+		return {"valid": false, "reason": "Builder không hợp lệ hoặc đang bị khóa"}
+	if building.builder_unit_ids.has(unit_id):
+		return {"valid": false, "reason": "Builder đã được gán"}
+	building.builder_unit_ids.append(unit_id)
+	building.worker_unit_ids.append(unit_id)
+	unit.locked_by_construction = true
+	unit.assigned_building_id = building_id
+	return {"valid": true, "reason": "Builder đã được gán"}
+
+func cancel_construction(state: GameState, building_id: String) -> int:
+	var building := state.buildings.get(building_id) as BuildingState
+	if building == null or building.phase != GameEnums.BuildingPhase.BUILDING:
+		return -1
+	for unit_id in building.builder_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit != null:
+			unit.locked_by_construction = false
+			unit.assigned_building_id = ""
+	var refund := cancel_refund(building.type)
+	state.buildings.erase(building_id)
+	state.materials += refund
+	return refund
 
 
 func unlock_builders(state: GameState, building_ids: Array[String]) -> void:

@@ -52,6 +52,23 @@ func cancel_building() -> void:
 	if can_edit_orders():
 		order_queue.cancel_building()
 
+func queue_cancel_construction(building_id: String) -> CancelConstructionOrder:
+	if not can_edit_orders():
+		return null
+	return order_queue.plan_cancel_construction(building_id)
+
+func cancel_cancel_construction() -> void:
+	if can_edit_orders():
+		order_queue.cancel_cancel_construction()
+
+func get_planned_cancel_construction() -> CancelConstructionOrder:
+	return order_queue.get_cancel_construction()
+
+func queue_assign_builder(building_id: String, unit_id: String) -> AssignBuilderOrder:
+	if not can_edit_orders():
+		return null
+	return order_queue.plan_assign_builder(building_id, unit_id)
+
 
 func clear_orders() -> void:
 	if can_edit_orders():

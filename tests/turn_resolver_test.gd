@@ -28,6 +28,7 @@ func _test_move_commit_replace_cancel_and_ghost_clear() -> void:
 		TurnResolver.Phase.VALIDATE_ORDERS,
 		TurnResolver.Phase.COMMIT_MOVEMENT,
 		TurnResolver.Phase.COMMIT_BUILDING_PLACEMENT,
+		TurnResolver.Phase.COMMIT_CANCEL_CONSTRUCTION,
 		TurnResolver.Phase.RESOLVE_SYSTEMS,
 		TurnResolver.Phase.RESOLVE_EVENTS,
 		TurnResolver.Phase.FINALIZE_DAY,

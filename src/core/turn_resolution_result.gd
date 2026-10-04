@@ -9,6 +9,9 @@ var building_committed := false
 var materials_spent := 0
 var new_building_ids: Array[String] = []
 var completed_building_ids: Array[String] = []
+var cancelled_building_ids: Array[String] = []
+var refunded_materials := 0
+var reassigned_builder_ids: Array[String] = []
 var rejected_orders: Array[Dictionary] = []
 
 

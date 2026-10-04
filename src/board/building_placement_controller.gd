@@ -29,6 +29,8 @@ func setup(
 	palette.building_selected.connect(select_building)
 	palette.builder_selection_changed.connect(_on_builder_selection_changed)
 	palette.cancel_requested.connect(cancel)
+	palette.cancel_construction_requested.connect(cancel_current_construction)
+	palette.reassign_builder_requested.connect(reassign_selected_builder)
 	palette.set_available_builders(state.units)
 	palette.set_builder_status(0)
 	turn_manager.resolution_started.connect(_on_resolution_started)
@@ -56,6 +58,27 @@ func cancel() -> void:
 	palette.set_status("Đã hủy bản thiết kế")
 	placement_mode_changed.emit(false)
 	_refresh_view()
+
+func cancel_current_construction() -> void:
+	if not turn_manager.can_edit_orders():
+		return
+	for candidate in state.buildings.values():
+		if candidate is BuildingState and candidate.phase == GameEnums.BuildingPhase.BUILDING:
+			turn_manager.queue_cancel_construction(candidate.id)
+			palette.set_status("Đã lập lệnh hủy xây — End Day để chốt")
+			return
+	palette.set_status("Không có building đang xây")
+
+func reassign_selected_builder() -> void:
+	if selected_builder_ids.is_empty():
+		palette.set_status("Hãy chọn builder trước")
+		return
+	for candidate in state.buildings.values():
+		if candidate is BuildingState and candidate.phase == GameEnums.BuildingPhase.BUILDING:
+			turn_manager.queue_assign_builder(candidate.id, selected_builder_ids[0])
+			palette.set_status("Đã lập lệnh gán builder — End Day để chốt")
+			return
+	palette.set_status("Không có building đang xây")
 
 
 func undo_current() -> bool:
@@ -123,6 +146,8 @@ func _on_builder_selection_changed(builder_ids: Array[String]) -> void:
 
 
 func _building_result_status(result: TurnResolutionResult) -> String:
+	if not result.cancelled_building_ids.is_empty():
+		return "Đã hủy xây — hoàn %d vật tư" % result.refunded_materials
 	var building: BuildingState
 	if not result.new_building_ids.is_empty():
 		building = state.buildings.get(result.new_building_ids[0]) as BuildingState
