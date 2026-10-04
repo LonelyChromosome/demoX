@@ -3,72 +3,109 @@ extends Node
 
 signal day_started(day: int)
 signal day_resolved(day: int)
+signal resolution_started
+signal resolution_phase_started(phase: int)
+signal resolution_finished(result: TurnResolutionResult)
 
 var state: GameState
-var pending_orders: Array[Dictionary] = []
-var pending_moves: Dictionary = {}
-var pending_building: BuildingState
+var order_queue := OrderQueue.new()
+var resolver := TurnResolver.new()
+var building_system := BuildingSystem.new()
+var is_resolving := false
 
 
 func setup(game_state: GameState) -> void:
 	state = game_state
+	if not resolver.phase_started.is_connected(_on_resolution_phase_started):
+		resolver.phase_started.connect(_on_resolution_phase_started)
 
 
-func queue_order(order: Dictionary) -> void:
-	pending_orders.append(order)
-
-
-func queue_move(unit_id: String, target: Vector2i) -> void:
-	pending_moves[unit_id] = target
+func queue_move(unit_id: String, target: Vector2i) -> MoveUnitOrder:
+	if not can_edit_orders():
+		return null
+	var unit := state.units.get(unit_id) as UnitState
+	if unit == null:
+		return null
+	return order_queue.plan_move(unit_id, unit.board_cell, target, state.day)
 
 
 func cancel_move(unit_id: String) -> void:
-	pending_moves.erase(unit_id)
+	if can_edit_orders():
+		order_queue.cancel_move(unit_id)
 
 
 func queue_building(type: GameEnums.BuildingType, core_cell: Vector2i) -> BuildingState:
-	var building_id := "building_%d" % (state.buildings.size() + 1)
-	pending_building = BuildingState.new(building_id, type, core_cell)
-	return pending_building
+	if not can_edit_orders():
+		return null
+	var order := PlaceBuildingOrder.new(_next_building_id(), type, core_cell, state.day)
+	order_queue.plan_building(order)
+	return order.to_blueprint()
 
 
 func cancel_building() -> void:
-	pending_building = null
+	if can_edit_orders():
+		order_queue.cancel_building()
 
 
 func clear_orders() -> void:
-	pending_orders.clear()
-	pending_moves.clear()
-	pending_building = null
+	if can_edit_orders():
+		order_queue.clear()
 
 
-func end_day() -> void:
-	if state == null:
-		return
-
-	_commit_moves()
-	_commit_building()
-	pending_orders.clear()
-	day_resolved.emit(state.day)
-
-	if state.day < GameState.MAX_DAYS:
-		state.day += 1
-		state.day_one_full_knowledge = false
-		day_started.emit(state.day)
-
-
-func _commit_moves() -> void:
-	for unit_id in pending_moves:
-		var unit := state.units.get(unit_id) as UnitState
-		if unit == null:
-			continue
-		unit.board_cell = pending_moves[unit_id]
-		unit.planned_cell = Vector2i(-1, -1)
-	pending_moves.clear()
+func end_day() -> TurnResolutionResult:
+	if state == null or is_resolving:
+		return null
+	is_resolving = true
+	resolution_started.emit()
+	var snapshot := order_queue.snapshot()
+	var result := resolver.resolve(state, snapshot, building_system)
+	order_queue.clear()
+	is_resolving = false
+	day_resolved.emit(result.resolved_day)
+	if result.next_day > result.resolved_day:
+		day_started.emit(result.next_day)
+	resolution_finished.emit(result)
+	return result
 
 
-func _commit_building() -> void:
-	if pending_building == null:
-		return
-	state.buildings[pending_building.id] = pending_building
-	pending_building = null
+func can_edit_orders() -> bool:
+	return state != null and not is_resolving
+
+
+func has_pending_move(unit_id: String) -> bool:
+	return order_queue.get_move(unit_id) != null
+
+
+func get_planned_move_target(unit_id: String) -> Vector2i:
+	var order := order_queue.get_move(unit_id)
+	return order.target if order != null else Vector2i(-1, -1)
+
+
+func get_planned_move_targets() -> Dictionary:
+	return order_queue.move_targets()
+
+
+func get_pending_move_count() -> int:
+	return order_queue.move_count()
+
+
+func get_planned_building() -> BuildingState:
+	var order := order_queue.get_building()
+	return order.to_blueprint() if order != null else null
+
+
+func has_pending_orders() -> bool:
+	return not order_queue.is_empty()
+
+
+func _next_building_id() -> String:
+	var index := state.buildings.size() + 1
+	var candidate := "building_%d" % index
+	while state.buildings.has(candidate):
+		index += 1
+		candidate = "building_%d" % index
+	return candidate
+
+
+func _on_resolution_phase_started(phase: int) -> void:
+	resolution_phase_started.emit(phase)
