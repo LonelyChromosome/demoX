@@ -37,5 +37,20 @@ func show_result(result: TurnResolutionResult) -> void:
 	if not result.rejected_orders.is_empty():
 		lines.append("Lệnh bị từ chối: %d" % result.rejected_orders.size())
 		for rejection in result.rejected_orders:
-			lines.append("• %s %s: %s" % [rejection.kind, rejection.id, rejection.reason])
+			lines.append(
+				"• %s %s: %s" % [_kind_name(rejection.kind), rejection.id, rejection.reason]
+			)
 	body_label.text = "\n".join(lines)
+
+
+func _kind_name(kind: String) -> String:
+	var names := {
+		"move": "Di chuyển",
+		"building": "Xây dựng",
+		"cancel_construction": "Hủy xây",
+		"assign_builder": "Phân thợ xây",
+		"remove_builder": "Rút thợ xây",
+		"demolition": "Phá dỡ",
+		"staffing": "Phân công",
+	}
+	return names.get(kind, kind)
