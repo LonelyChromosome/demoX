@@ -68,7 +68,7 @@ func _toggle(enabled: bool, unit_id: String) -> void:
 
 
 func _update_hint() -> void:
-	hint.text = "Food available: %d · Need: %d\nĐã chọn %d/%d. Quân nhịn 3 ngày sẽ chết." % [required_count, need_count, selected.size(), required_count]
+	hint.text = "Lương thực hiện có: %d · Số người cần ăn: %d\nĐã chọn %d/%d. Quân nhịn đủ 3 ngày và hết ngày thứ 3 sẽ chết." % [required_count, need_count, selected.size(), required_count]
 	confirm.disabled = selected.size() != required_count
 
 
