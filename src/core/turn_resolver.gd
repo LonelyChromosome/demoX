@@ -14,6 +14,7 @@ enum Phase {
 	COMMIT_CANCEL_CONSTRUCTION,
 	COMMIT_DEMOLITION,
 	RESOLVE_SYSTEMS,
+	FOOD_CONSUMPTION,
 	RESOLVE_EVENTS,
 	FINALIZE_DEMOLITION,
 	COMMIT_STAFFING,
@@ -46,12 +47,41 @@ func resolve(
 	_run_phase(Phase.COMMIT_CANCEL_CONSTRUCTION, result)
 	_commit_cancel(state, valid_cancel, building_system, result)
 	_commit_reassignments(state, snapshot.assign_builder_orders, building_system, result)
+	_commit_builder_removals(state, snapshot.remove_builder_orders, building_system, result)
 
 	_run_phase(Phase.COMMIT_DEMOLITION, result)
 	_commit_demolition(state, valid_demolition, building_system, result)
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
+	_run_phase(Phase.FOOD_CONSUMPTION, result)
+	if not food_system.resolve_consumption(state, result, building_system):
+		return result
+	_finish_resolution(state, snapshot, building_system, result)
+	return result
+
+
+func resume_after_ration(
+	state: GameState,
+	snapshot: PendingOrderSnapshot,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult,
+	fed_unit_ids: Array[String]
+) -> TurnResolutionResult:
+	if not result.awaiting_ration:
+		return result
+	if not food_system.apply_ration(state, result, fed_unit_ids, building_system):
+		return result
+	_finish_resolution(state, snapshot, building_system, result)
+	return result
+
+
+func _finish_resolution(
+	state: GameState,
+	snapshot: PendingOrderSnapshot,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> void:
 	_run_phase(Phase.RESOLVE_EVENTS, result)
 	_resolve_events(state, result)
 
@@ -70,7 +100,6 @@ func resolve(
 
 	_run_phase(Phase.START_NEXT_DAY, result)
 	_start_next_day(state, result)
-	return result
 
 
 func _validate_moves(
@@ -132,7 +161,8 @@ func _validate_building(
 		return null
 	var targets: Array = []
 	for move in valid_moves:
-		targets.append(move.target)
+		if order.job_slots.get(move.target, GameEnums.JobRole.NONE) != GameEnums.JobRole.BUILDER:
+			targets.append(move.target)
 	var validation := building_system.validate_placement(state, order.core_cell, targets)
 	if not validation.valid:
 		result.reject("building", order.building_id, validation.reason)
@@ -245,12 +275,30 @@ func _commit_reassignments(
 			result.reject("assign_builder", order.unit_id, "Building đã bị hủy trong turn")
 			continue
 		var assignment := building_system.reassign_builder_to_construction(
-			state, order.building_id, order.unit_id
+			state, order.building_id, order.unit_id, order.slot_cell
 		)
 		if not assignment.valid:
 			result.reject("assign_builder", order.unit_id, assignment.reason)
 		else:
 			result.reassigned_builder_ids.append(order.unit_id)
+
+func _commit_builder_removals(
+	state: GameState,
+	orders: Array[RemoveBuilderOrder],
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> void:
+	for order in orders:
+		var unit := state.units.get(order.unit_id) as UnitState
+		var old_cell := unit.board_cell if unit != null else Vector2i(-1, -1)
+		if not building_system.remove_builder_from_construction(
+			state, order.building_id, order.unit_id
+		):
+			result.reject("remove_builder", order.unit_id, "Builder assignment không tồn tại")
+			continue
+		var building := state.buildings.get(order.building_id) as BuildingState
+		if building != null:
+			building.job_slots.erase(old_cell)
 
 func _validate_demolition(
 	state: GameState,

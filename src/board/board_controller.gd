@@ -1,6 +1,9 @@
 class_name BoardController
 extends Node
 
+signal context_requested(cell: Vector2i)
+signal view_changed
+
 var state: GameState
 var turn_manager: TurnManager
 var view: BoardView
@@ -11,6 +14,8 @@ var input_enabled := true
 var resolving := false
 var building_system := BuildingSystem.new()
 var staffing_system := StaffingSystem.new()
+var resolution_unit_snapshot: Dictionary = {}
+var resolution_building_snapshot: Dictionary = {}
 
 
 func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -> void:
@@ -20,6 +25,7 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -
 
 	view.cell_pressed.connect(_on_cell_pressed)
 	view.cell_released.connect(_on_cell_released)
+	view.resolution_animation_finished.connect(_on_resolution_animation_finished)
 	turn_manager.day_resolved.connect(_on_day_resolved)
 	turn_manager.resolution_started.connect(_on_resolution_started)
 	turn_manager.resolution_finished.connect(_on_resolution_finished)
@@ -55,6 +61,8 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 
 	if not selected_unit_id.is_empty():
 		_plan_move(selected_unit_id, cell)
+	else:
+		context_requested.emit(cell)
 
 
 func _on_cell_released(cell: Vector2i) -> void:
@@ -89,14 +97,21 @@ func _plan_move(unit_id: String, target: Vector2i) -> void:
 		view.flash_invalid_cell(target)
 		return
 
+	var job_slot := turn_manager.get_job_slot_at(target)
 	turn_manager.queue_move(unit_id, target)
+	if not job_slot.is_empty() and not turn_manager.plan_job_drop(unit_id, target):
+		turn_manager.cancel_move(unit_id)
+		view.flash_invalid_cell(target)
+		return
+	if job_slot.is_empty():
+		turn_manager.plan_job_drop(unit_id, target)
 	_refresh_view()
 
 
 func _is_free_target(cell: Vector2i, moving_unit_id: String) -> bool:
 	if (
 		building_system.is_cell_occupied_by_building(state, cell)
-		and not staffing_system.is_operational_cell_available(state, cell)
+		and turn_manager.get_job_slot_at(cell).is_empty()
 	):
 		return false
 	var planned_targets := turn_manager.get_planned_move_targets()
@@ -143,6 +158,7 @@ func _on_day_resolved(_day: int) -> void:
 func _refresh_view() -> void:
 	if view != null:
 		view.present(state.units, selected_unit_id, turn_manager.get_planned_move_targets())
+		view_changed.emit()
 
 
 func set_input_enabled(enabled: bool) -> void:
@@ -158,8 +174,27 @@ func _can_accept_input() -> bool:
 func _on_resolution_started() -> void:
 	resolving = true
 	dragged_unit_id = ""
+	resolution_unit_snapshot.clear()
+	resolution_building_snapshot.clear()
+	for candidate in state.units.values():
+		if candidate is UnitState:
+			resolution_unit_snapshot[candidate.id] = {
+				"cell": candidate.board_cell,
+				"rank": candidate.rank,
+				"faction": candidate.faction,
+			}
+	for candidate in state.buildings.values():
+		if candidate is BuildingState:
+			resolution_building_snapshot[candidate.id] = {
+				"core": candidate.core_cell,
+				"type": candidate.type,
+			}
 
 
-func _on_resolution_finished(_result: TurnResolutionResult) -> void:
-	resolving = false
+func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	_refresh_view()
+	view.play_resolution(result, resolution_unit_snapshot, resolution_building_snapshot)
+
+
+func _on_resolution_animation_finished() -> void:
+	resolving = false

@@ -25,6 +25,7 @@ func _test_active_demolition_lifecycle() -> void:
 	manager.resolution_phase_started.connect(func(phase: int) -> void:
 		if phase == TurnResolver.Phase.RESOLVE_SYSTEMS:
 			visible_during_systems = state.buildings.has(farm.id) and farm.phase == GameEnums.BuildingPhase.DEMOLISHING
+	)
 	var result := manager.end_day()
 	_check(visible_during_systems, "Demolishing building was removed before RESOLVE_SYSTEMS")
 	_check(result.demolishing_building_ids.has(farm.id), "ACTIVE building did not enter DEMOLISHING")
@@ -72,6 +73,7 @@ func _new_context(materials: int) -> Dictionary:
 	var manager := TurnManager.new()
 	root.add_child(manager)
 	manager.setup(state)
+	state.food = 100
 	for index in range(4):
 		var builder := UnitState.new("builder_%d" % index)
 		builder.rank = GameEnums.Rank.ROOK

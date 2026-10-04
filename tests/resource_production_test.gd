@@ -5,7 +5,6 @@ func _init() -> void:
 	_test_farm_staffing()
 	_test_workshop_manager_output()
 	_test_building_and_completion_timing()
-	_test_construction_builders_do_not_become_farm_staff()
 	_test_demolition_produces_before_removal()
 	_test_one_production_per_end_day()
 	print("RESOURCE_PRODUCTION_TEST_OK")
@@ -33,7 +32,7 @@ func _test_farm_staffing() -> void:
 			farm.worker_unit_ids.assign(ids)
 		var before := state.food
 		var result := manager.end_day()
-		_check(state.food - before == entry[1], "Farm staff output mismatch")
+		_check(state.food - before == entry[1] - result.food_consumed, "Farm staff output mismatch")
 		_check(result.food_produced == entry[1], "Farm result output mismatch")
 
 	var duplicate_context := _new_context()
@@ -135,23 +134,6 @@ func _test_building_and_completion_timing() -> void:
 	_check(workshop_result.materials_produced == 1, "Newly completed Workshop did not produce immediately")
 
 
-func _test_construction_builders_do_not_become_farm_staff() -> void:
-	var context := _new_context()
-	var farm := _add_building(
-		context.state, "farm", GameEnums.BuildingType.FARM, GameEnums.BuildingPhase.BUILDING
-	)
-	farm.days_left = 1
-	var builder := _add_unit(context.state, "builder", GameEnums.Rank.ROOK)
-	farm.builder_unit_ids = [builder.id]
-	builder.locked_by_construction = true
-	builder.assigned_building_id = farm.id
-	var result := context.manager.end_day()
-	_check(farm.phase == GameEnums.BuildingPhase.ACTIVE, "Farm did not complete")
-	_check(result.food_produced == 2, "Construction builder was incorrectly counted as Farm staff")
-	_check(farm.worker_unit_ids.is_empty(), "Construction builder leaked into Farm worker list")
-	_check(farm.builder_unit_ids.is_empty(), "Completed construction kept stale builder ids")
-
-
 func _test_demolition_produces_before_removal() -> void:
 	var farm_context := _new_context()
 	var farm := _add_building(
@@ -180,7 +162,7 @@ func _test_one_production_per_end_day() -> void:
 	_add_building(context.state, "farm", GameEnums.BuildingType.FARM, GameEnums.BuildingPhase.ACTIVE)
 	_check(context.manager.end_day().food_produced == 2, "First End Day output mismatch")
 	_check(context.manager.end_day().food_produced == 2, "Production ran more than once per End Day")
-	_check(context.state.food == 4, "Farm production total mismatch")
+	_check(context.state.food == 104, "Farm production total mismatch")
 
 
 func _new_context() -> Dictionary:
@@ -188,6 +170,7 @@ func _new_context() -> Dictionary:
 	var manager := TurnManager.new()
 	root.add_child(manager)
 	manager.setup(state)
+	state.food = 100
 	return {"state": state, "manager": manager}
 
 

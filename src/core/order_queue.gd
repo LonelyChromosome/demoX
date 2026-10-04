@@ -7,8 +7,11 @@ var _move_orders: Dictionary = {}
 var _building_order: PlaceBuildingOrder
 var _cancel_construction_order: CancelConstructionOrder
 var _assign_builder_orders: Dictionary = {}
+var _remove_builder_orders: Dictionary = {}
 var _demolish_building_order: DemolishBuildingOrder
 var _staffing_orders: Dictionary = {}
+var _planned_job_slots: Dictionary = {}
+var _planned_builder_cells: Dictionary = {}
 
 
 func plan_move(
@@ -43,12 +46,17 @@ func move_count() -> int:
 
 
 func plan_building(order: PlaceBuildingOrder) -> void:
+	if _building_order != null and _building_order.building_id != order.building_id:
+		_planned_job_slots.erase(_building_order.building_id)
+		_planned_builder_cells.clear()
 	_building_order = order
 	changed.emit()
 
 
 func cancel_building() -> void:
 	if _building_order != null:
+		_planned_job_slots.erase(_building_order.building_id)
+		_planned_builder_cells.clear()
 		_building_order = null
 		changed.emit()
 
@@ -82,25 +90,97 @@ func cancel_demolition() -> void:
 func get_demolition() -> DemolishBuildingOrder:
 	return _demolish_building_order
 
+func plan_job_slot(building_id: String, cell: Vector2i, role: GameEnums.JobRole) -> void:
+	var slots: Dictionary = _planned_job_slots.get(building_id, {})
+	# NONE is an explicit tombstone so a planned clear can override authoritative slots.
+	slots[cell] = role
+	_planned_job_slots[building_id] = slots
+	if _building_order != null and _building_order.building_id == building_id:
+		_building_order.job_slots.clear()
+		for slot_cell in slots:
+			if slots[slot_cell] != GameEnums.JobRole.NONE:
+				_building_order.job_slots[slot_cell] = slots[slot_cell]
+	var staffing := _staffing_orders.get(building_id) as SetBuildingStaffOrder
+	if staffing != null:
+		if role == GameEnums.JobRole.NONE:
+			staffing.job_slots.erase(cell)
+		else:
+			staffing.job_slots[cell] = role
+	changed.emit()
+
+func planned_job_slots(building_id: String) -> Dictionary:
+	return (_planned_job_slots.get(building_id, {}) as Dictionary).duplicate(true)
+
+func add_planned_builder(unit_id: String, cell: Vector2i) -> bool:
+	if _building_order == null:
+		return false
+	if not _building_order.builder_unit_ids.has(unit_id):
+		_building_order.builder_unit_ids.append(unit_id)
+	if _planned_builder_cells.has(unit_id):
+		var old_cell: Vector2i = _planned_builder_cells[unit_id]
+		if old_cell != cell:
+			var slots: Dictionary = _planned_job_slots.get(_building_order.building_id, {})
+			slots.erase(old_cell)
+	_planned_builder_cells[unit_id] = cell
+	plan_job_slot(_building_order.building_id, cell, GameEnums.JobRole.BUILDER)
+	return true
+
+func remove_planned_builder_at(cell: Vector2i) -> Array[String]:
+	var removed: Array[String] = []
+	if _building_order == null:
+		return removed
+	for unit_id in _planned_builder_cells.keys():
+		if _planned_builder_cells[unit_id] == cell:
+			_building_order.builder_unit_ids.erase(unit_id)
+			_planned_builder_cells.erase(unit_id)
+			removed.append(unit_id)
+	return removed
+
+func remove_planned_builder(unit_id: String) -> void:
+	if _building_order == null or not _planned_builder_cells.has(unit_id):
+		return
+	var old_cell: Vector2i = _planned_builder_cells[unit_id]
+	_planned_builder_cells.erase(unit_id)
+	_building_order.builder_unit_ids.erase(unit_id)
+	var slots: Dictionary = _planned_job_slots.get(_building_order.building_id, {})
+	slots.erase(old_cell)
+	_building_order.job_slots.erase(old_cell)
+	changed.emit()
+
 func plan_staffing(order: SetBuildingStaffOrder) -> void:
 	_staffing_orders[order.building_id] = order
+	var preview_slots := order.job_slots.duplicate(true)
+	var existing: Dictionary = _planned_job_slots.get(order.building_id, {})
+	for cell in existing:
+		if existing[cell] == GameEnums.JobRole.NONE:
+			preview_slots[cell] = GameEnums.JobRole.NONE
+	_planned_job_slots[order.building_id] = preview_slots
 	changed.emit()
 
 func cancel_staffing(building_id: String) -> void:
 	if _staffing_orders.erase(building_id):
+		_planned_job_slots.erase(building_id)
 		changed.emit()
 
 func get_staffing(building_id: String) -> SetBuildingStaffOrder:
 	return _staffing_orders.get(building_id) as SetBuildingStaffOrder
 
-func plan_assign_builder(building_id: String, unit_id: String) -> AssignBuilderOrder:
-	var order := AssignBuilderOrder.new(building_id, unit_id)
-	_assign_builder_orders[building_id] = order
+func plan_assign_builder(
+	building_id: String, unit_id: String, cell := Vector2i(-1, -1)
+) -> AssignBuilderOrder:
+	var order := AssignBuilderOrder.new(building_id, unit_id, cell)
+	_assign_builder_orders["%s:%s" % [building_id, unit_id]] = order
 	changed.emit()
 	return order
 
-func cancel_assign_builder(building_id: String) -> void:
-	if _assign_builder_orders.erase(building_id):
+func plan_remove_builder(building_id: String, unit_id: String) -> RemoveBuilderOrder:
+	var order := RemoveBuilderOrder.new(building_id, unit_id)
+	_remove_builder_orders["%s:%s" % [building_id, unit_id]] = order
+	changed.emit()
+	return order
+
+func cancel_assign_builder(building_id: String, unit_id: String) -> void:
+	if _assign_builder_orders.erase("%s:%s" % [building_id, unit_id]):
 		changed.emit()
 
 
@@ -126,6 +206,8 @@ func snapshot() -> PendingOrderSnapshot:
 			result.staffing_orders.append(order.copy())
 	for building_id in _assign_builder_orders:
 		result.assign_builder_orders.append((_assign_builder_orders[building_id] as AssignBuilderOrder).copy())
+	for key in _remove_builder_orders:
+		result.remove_builder_orders.append((_remove_builder_orders[key] as RemoveBuilderOrder).copy())
 	return result
 
 
@@ -136,7 +218,10 @@ func clear() -> void:
 	_cancel_construction_order = null
 	_demolish_building_order = null
 	_staffing_orders.clear()
+	_planned_job_slots.clear()
+	_planned_builder_cells.clear()
 	_assign_builder_orders.clear()
+	_remove_builder_orders.clear()
 	if had_orders:
 		changed.emit()
 
@@ -149,4 +234,6 @@ func is_empty() -> bool:
 		and _demolish_building_order == null
 		and _staffing_orders.is_empty()
 		and _assign_builder_orders.is_empty()
+		and _remove_builder_orders.is_empty()
+		and _planned_job_slots.is_empty()
 	)

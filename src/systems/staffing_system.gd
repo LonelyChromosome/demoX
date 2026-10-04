@@ -57,10 +57,23 @@ func validate_orders(
 			continue
 
 		var manager_id := order.manager_unit_id
+		var normalized_slots := order.job_slots.duplicate(true)
+		var has_explicit_slots := not order.job_slots.is_empty()
 		if not manager_id.is_empty():
 			var manager_validation := _validate_unit(state, building, manager_id, true)
 			if not manager_validation.valid:
 				result.reject("staffing", order.building_id, manager_validation.reason)
+				continue
+			var manager := state.units.get(manager_id) as UnitState
+			var manager_role := (
+				GameEnums.JobRole.WORKSHOP_MANAGER
+				if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP
+				else GameEnums.JobRole.MANAGER
+			)
+			if not has_explicit_slots:
+				normalized_slots[manager.board_cell] = manager_role
+			elif normalized_slots.get(manager.board_cell, GameEnums.JobRole.NONE) != manager_role:
+				result.reject("staffing", order.building_id, "Manager chưa đứng đúng role slot")
 				continue
 
 		var workers: Array[String] = []
@@ -75,6 +88,14 @@ func validate_orders(
 				var worker_validation := _validate_unit(state, building, worker_id, false)
 				if not worker_validation.valid:
 					result.reject("staffing", order.building_id, worker_validation.reason)
+					workers.clear()
+					invalid_worker = true
+					break
+				var worker := state.units.get(worker_id) as UnitState
+				if not has_explicit_slots:
+					normalized_slots[worker.board_cell] = GameEnums.JobRole.FARM_WORKER
+				elif normalized_slots.get(worker.board_cell, GameEnums.JobRole.NONE) != GameEnums.JobRole.FARM_WORKER:
+					result.reject("staffing", order.building_id, "Worker chưa đứng đúng role slot")
 					workers.clear()
 					invalid_worker = true
 					break
@@ -98,7 +119,11 @@ func validate_orders(
 			continue
 		for unit_id in assigned_ids:
 			planned_owner[unit_id] = order.building_id
-		valid.append(SetBuildingStaffOrder.new(order.building_id, manager_id, workers, order.planned_day))
+		valid.append(
+			SetBuildingStaffOrder.new(
+				order.building_id, manager_id, workers, order.planned_day, normalized_slots
+			)
+		)
 	return valid
 
 
@@ -125,11 +150,13 @@ func commit(
 			assignments[candidate.id] = {
 				"manager": planned_order.manager_unit_id,
 				"workers": planned_order.worker_unit_ids.duplicate(),
+				"slots": planned_order.job_slots.duplicate(true),
 			}
 		else:
 			assignments[candidate.id] = {
 				"manager": candidate.manager_unit_id,
 				"workers": candidate.worker_unit_ids.duplicate(),
+				"slots": candidate.job_slots.duplicate(true),
 			}
 
 	var planned_units := {}
@@ -189,6 +216,11 @@ func commit(
 		var building := state.buildings.get(building_id) as BuildingState
 		building.manager_unit_id = ""
 		building.worker_unit_ids.clear()
+		building.job_slots.clear()
+		var assignment: Dictionary = assignments[building_id]
+		for cell in assignment.slots:
+			if assignment.slots[cell] != GameEnums.JobRole.NONE:
+				building.job_slots[cell] = assignment.slots[cell]
 
 	for building_id in supported_building_ids:
 		var target := state.buildings.get(building_id) as BuildingState
@@ -199,6 +231,11 @@ func commit(
 			var manager := state.units.get(manager_id) as UnitState
 			manager.work_building_id = building_id
 			manager.is_manager = true
+			target.job_slots[manager.board_cell] = (
+				GameEnums.JobRole.WORKSHOP_MANAGER
+				if target.type == GameEnums.BuildingType.MATERIAL_WORKSHOP
+				else GameEnums.JobRole.MANAGER
+			)
 		for worker_id in assignment.workers:
 			if worker_id == manager_id:
 				continue
@@ -208,6 +245,7 @@ func commit(
 			var worker := state.units.get(worker_id) as UnitState
 			worker.work_building_id = building_id
 			worker.is_manager = false
+			target.job_slots[worker.board_cell] = GameEnums.JobRole.FARM_WORKER
 	if not orders.is_empty():
 		for order in orders:
 			result.staffing_committed_building_ids.append(order.building_id)

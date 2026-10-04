@@ -115,6 +115,7 @@ func _new_context(materials: int) -> Dictionary:
 	var manager := TurnManager.new()
 	root.add_child(manager)
 	manager.setup(state)
+	state.food = 100
 	for index in range(4):
 		var builder := UnitState.new("builder_%d" % index)
 		builder.rank = GameEnums.Rank.ROOK

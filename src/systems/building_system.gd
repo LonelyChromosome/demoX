@@ -94,7 +94,7 @@ func remove_builder_from_construction(
 	return true
 
 func reassign_builder_to_construction(
-	state: GameState, building_id: String, unit_id: String
+	state: GameState, building_id: String, unit_id: String, slot_cell := Vector2i(-1, -1)
 ) -> Dictionary:
 	var building := state.buildings.get(building_id) as BuildingState
 	if building == null or building.phase != GameEnums.BuildingPhase.BUILDING:
@@ -104,7 +104,14 @@ func reassign_builder_to_construction(
 		return {"valid": false, "reason": "Builder không hợp lệ hoặc đang bị khóa"}
 	if building.builder_unit_ids.has(unit_id):
 		return {"valid": false, "reason": "Builder đã được gán"}
+	if slot_cell != Vector2i(-1, -1):
+		if slot_cell == building.core_cell or slot_cell not in footprint(building.core_cell):
+			return {"valid": false, "reason": "Builder phải ở operational cell"}
+		if unit.board_cell != slot_cell:
+			return {"valid": false, "reason": "Builder chưa đứng đúng job slot"}
 	building.builder_unit_ids.append(unit_id)
+	if slot_cell != Vector2i(-1, -1):
+		building.job_slots[slot_cell] = GameEnums.JobRole.BUILDER
 	unit.locked_by_construction = true
 	unit.assigned_building_id = building_id
 	return {"valid": true, "reason": "Builder đã được gán"}
@@ -158,6 +165,9 @@ func unlock_builders(state: GameState, building_ids: Array[String]) -> void:
 				unit.assigned_building_id = ""
 				unit.locked_by_construction = false
 		building.builder_unit_ids.clear()
+		for cell in building.job_slots.keys():
+			if building.job_slots[cell] == GameEnums.JobRole.BUILDER:
+				building.job_slots.erase(cell)
 
 
 func footprint(core_cell: Vector2i) -> Array[Vector2i]:
@@ -205,6 +215,13 @@ func _building_cells(buildings: Dictionary) -> Dictionary:
 
 func is_cell_occupied_by_building(state: GameState, cell: Vector2i) -> bool:
 	return _building_cells(state.buildings).has(cell)
+
+
+func building_at_cell(state: GameState, cell: Vector2i) -> BuildingState:
+	for candidate in state.buildings.values():
+		if candidate is BuildingState and cell in footprint(candidate.core_cell):
+			return candidate
+	return null
 
 
 func is_inside_board(cell: Vector2i) -> bool:

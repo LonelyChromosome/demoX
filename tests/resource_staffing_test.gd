@@ -178,6 +178,7 @@ func _new_context() -> Dictionary:
 	var manager := TurnManager.new()
 	root.add_child(manager)
 	manager.setup(state)
+	state.food = 100
 	return {"state": state, "manager": manager}
 
 

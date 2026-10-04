@@ -1,13 +1,21 @@
 extends Control
 
+const DEV_MODE := false
+
 var game_state := GameState.new()
 var turn_manager := TurnManager.new()
 var board: BoardView
 var board_controller: BoardController
 var building_palette: BuildingPalette
 var building_placement_controller: BuildingPlacementController
+var contextual_controller: ContextualBoardController
+var context_popup: ContextPopup
+var ration_overlay: RationOverlay
 var report_panel: ReportPanel
 var day_label: Label
+var resource_label: Label
+var visual_transition := false
+var status_label: Label
 
 
 func _ready() -> void:
@@ -18,11 +26,21 @@ func _ready() -> void:
 	board_controller = BoardController.new()
 	add_child(board_controller)
 	board_controller.setup(game_state, turn_manager, board)
-	building_placement_controller = BuildingPlacementController.new()
-	add_child(building_placement_controller)
-	building_placement_controller.setup(game_state, turn_manager, board, building_palette)
-	building_placement_controller.placement_mode_changed.connect(_on_placement_mode_changed)
+	contextual_controller = ContextualBoardController.new()
+	add_child(contextual_controller)
+	contextual_controller.setup(game_state, turn_manager, board, context_popup)
+	board_controller.context_requested.connect(contextual_controller.open_for_cell)
+	board_controller.view_changed.connect(contextual_controller.refresh)
+	board.resolution_animation_finished.connect(_on_resolution_animation_finished)
+	if DEV_MODE:
+		building_placement_controller = BuildingPlacementController.new()
+		add_child(building_placement_controller)
+		building_placement_controller.setup(game_state, turn_manager, board, building_palette)
+		building_placement_controller.placement_mode_changed.connect(_on_placement_mode_changed)
 	turn_manager.day_started.connect(_on_day_started)
+	turn_manager.resolution_finished.connect(_on_resolution_finished)
+	turn_manager.ration_requested.connect(_on_ration_requested)
+	ration_overlay.submitted.connect(_on_ration_submitted)
 	_refresh_header()
 
 
@@ -45,6 +63,12 @@ func _build_shell() -> void:
 	day_label = Label.new()
 	day_label.add_theme_font_size_override("font_size", 28)
 	top.add_child(day_label)
+	resource_label = Label.new()
+	resource_label.add_theme_font_size_override("font_size", 18)
+	top.add_child(resource_label)
+	status_label = Label.new()
+	status_label.add_theme_color_override("font_color", Color("d9b86c"))
+	top.add_child(status_label)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -76,28 +100,32 @@ func _build_shell() -> void:
 	board.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(board)
 
-	var palette_scroll := ScrollContainer.new()
-	palette_scroll.custom_minimum_size.x = 270
-	palette_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(palette_scroll)
-
 	building_palette = BuildingPalette.new()
-	building_palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	palette_scroll.add_child(building_palette)
+	building_palette.visible = DEV_MODE
+	if DEV_MODE:
+		var palette_scroll := ScrollContainer.new()
+		palette_scroll.custom_minimum_size.x = 270
+		palette_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		content.add_child(palette_scroll)
+		building_palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		palette_scroll.add_child(building_palette)
 
 	report_panel = ReportPanel.new()
 	report_panel.visible = false
 	content.add_child(report_panel)
 
+	context_popup = ContextPopup.new()
+	add_child(context_popup)
+	ration_overlay = RationOverlay.new()
+	add_child(ration_overlay)
+
 
 func _seed_day_one() -> void:
-	game_state.food = 10
-	game_state.materials = 2
+	game_state.food = 4
+	game_state.materials = 3
 	_spawn_piece("king", "Vua", GameEnums.Rank.KING, Vector2i(4, 7))
-	_spawn_piece("queen", "Hậu", GameEnums.Rank.QUEEN, Vector2i(3, 7))
 	_spawn_piece("rook", "Xe", GameEnums.Rank.ROOK, Vector2i(0, 7))
 	_spawn_piece("knight", "Mã", GameEnums.Rank.KNIGHT, Vector2i(1, 7))
-	_spawn_piece("bishop", "Tịnh", GameEnums.Rank.BISHOP, Vector2i(2, 7))
 	_spawn_piece("pawn_d", "Tốt D", GameEnums.Rank.PAWN, Vector2i(3, 6))
 	_spawn_piece("pawn_e", "Tốt E", GameEnums.Rank.PAWN, Vector2i(4, 6))
 
@@ -111,6 +139,8 @@ func _spawn_piece(unit_id: String, unit_name: String, rank: GameEnums.Rank, cell
 
 
 func _undo_current() -> void:
+	if contextual_controller != null and contextual_controller.undo_current():
+		return
 	if building_placement_controller != null and building_placement_controller.undo_current():
 		return
 	if board_controller != null:
@@ -118,16 +148,46 @@ func _undo_current() -> void:
 
 
 func _toggle_report() -> void:
-	report_panel.visible = not report_panel.visible
+	if report_panel.visible:
+		report_panel.visible = false
+		return
+	report_panel.visible = true
+	report_panel.modulate.a = 0.0
+	report_panel.position.x += 18.0
+	var tween := create_tween().set_parallel()
+	tween.tween_property(report_panel, "modulate:a", 1.0, 0.16)
+	tween.tween_property(report_panel, "position:x", report_panel.position.x - 18.0, 0.16)
 
 
 func _end_day() -> void:
-	if game_state.day < GameState.MAX_DAYS:
+	if not visual_transition and game_state.day < GameState.MAX_DAYS:
+		visual_transition = true
 		turn_manager.end_day()
 
 
 func _on_day_started(_day: int) -> void:
 	_refresh_header()
+
+
+func _on_resolution_finished(result: TurnResolutionResult) -> void:
+	_refresh_header()
+	report_panel.show_result(result)
+	if not result.starved_unit_ids.is_empty():
+		status_label.text = "Chết đói: %s" % ", ".join(result.starved_unit_ids)
+	else:
+		status_label.text = "+%d Food · +%d Materials" % [result.food_produced, result.materials_produced]
+
+
+func _on_ration_requested(result: TurnResolutionResult) -> void:
+	ration_overlay.show_request(game_state, result)
+
+
+func _on_ration_submitted(unit_ids: Array[String]) -> void:
+	turn_manager.submit_ration(unit_ids)
+
+
+func _on_resolution_animation_finished() -> void:
+	visual_transition = false
 
 
 func _on_placement_mode_changed(active: bool) -> void:
@@ -136,3 +196,4 @@ func _on_placement_mode_changed(active: bool) -> void:
 
 func _refresh_header() -> void:
 	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
+	resource_label.text = "   Food %d   ·   Materials %d" % [game_state.food, game_state.materials]

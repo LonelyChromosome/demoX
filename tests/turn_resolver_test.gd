@@ -31,6 +31,7 @@ func _test_move_commit_replace_cancel_and_ghost_clear() -> void:
 		TurnResolver.Phase.COMMIT_CANCEL_CONSTRUCTION,
 		TurnResolver.Phase.COMMIT_DEMOLITION,
 		TurnResolver.Phase.RESOLVE_SYSTEMS,
+		TurnResolver.Phase.FOOD_CONSUMPTION,
 		TurnResolver.Phase.RESOLVE_EVENTS,
 		TurnResolver.Phase.FINALIZE_DEMOLITION,
 		TurnResolver.Phase.COMMIT_STAFFING,
@@ -137,6 +138,7 @@ func _new_context() -> Dictionary:
 	var manager := TurnManager.new()
 	root.add_child(manager)
 	manager.setup(state)
+	state.food = 100
 	state.materials = 20
 	for index in range(4):
 		var builder := UnitState.new("builder_%d" % index)

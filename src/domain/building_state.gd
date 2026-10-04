@@ -10,6 +10,7 @@ var builder_unit_ids: Array[String] = []
 
 var manager_unit_id := ""
 var worker_unit_ids: Array[String] = []
+var job_slots: Dictionary = {}
 var prisoner_labor := 0
 
 
