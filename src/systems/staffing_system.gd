@@ -168,13 +168,20 @@ func commit(
 		for worker_id in old_building.worker_unit_ids:
 			old_staff_ids[worker_id] = true
 	var owners := {}
-	for unit in state.units.values():
-		if not (unit is UnitState):
+	for candidate_unit in state.units.values():
+		if not (candidate_unit is UnitState):
 			continue
-		var has_work_ref := not unit.work_building_id.is_empty()
+		var unit := candidate_unit as UnitState
+		var has_work_ref: bool = not unit.work_building_id.is_empty()
 		if (
 			old_staff_ids.has(unit.id)
-			or (has_work_ref and (unit.work_building_id in assignments or not state.buildings.has(unit.work_building_id)))
+			or (
+				has_work_ref
+				and (
+					unit.work_building_id in assignments
+					or not state.buildings.has(unit.work_building_id)
+				)
+			)
 		):
 			unit.is_manager = false
 			unit.work_building_id = ""
