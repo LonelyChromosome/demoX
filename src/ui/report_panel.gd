@@ -27,9 +27,9 @@ func show_result(result: TurnResolutionResult) -> void:
 	var food_delta := result.food_produced - result.food_consumed
 	var material_delta := result.materials_produced - result.materials_spent + result.refunded_materials
 	if food_delta != 0:
-		lines.append("Food: %s%d" % ["+" if food_delta > 0 else "", food_delta])
+		lines.append("Lương thực: %s%d" % ["+" if food_delta > 0 else "", food_delta])
 	if material_delta != 0:
-		lines.append("Materials: %s%d" % ["+" if material_delta > 0 else "", material_delta])
+		lines.append("Vật tư: %s%d" % ["+" if material_delta > 0 else "", material_delta])
 	if food_delta == 0 and material_delta == 0:
 		lines.append("Tài nguyên: không đổi")
 	if not result.starved_unit_ids.is_empty():
