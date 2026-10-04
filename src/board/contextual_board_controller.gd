@@ -78,7 +78,7 @@ func open_for_cell(cell: Vector2i) -> void:
 	else:
 		board.present_context_target("", Vector2i(-1, -1), cell)
 	var actions := {}
-	var detail := "%s · %s · còn %d ngày · %d builder\nManager: %s · Workers: %d%s" % [
+	var detail := "%s · %s · còn %d ngày · %d thợ xây\nQuản lý: %s · Lao động: %d%s" % [
 		_type_name(building.type),
 		_phase_name(building.phase),
 		building.days_left,
@@ -88,8 +88,8 @@ func open_for_cell(cell: Vector2i) -> void:
 		_planned_label(building),
 	]
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		detail += "\nRight-click ô operational để đặt Builder slot, rồi kéo quân vào slot."
-		detail += "\nPlacement: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
+		detail += "\nChuột phải ô vận hành để đặt vị trí thợ xây, rồi kéo quân vào."
+		detail += "\nVị trí: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
 	var on_core := current_cell == building.core_cell
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT and on_core:
 		actions["cancel_blueprint"] = "Hủy blueprint"
@@ -99,7 +99,7 @@ func open_for_cell(cell: Vector2i) -> void:
 	elif building.phase == GameEnums.BuildingPhase.BUILDING and on_core:
 		actions["cancel_construction"] = "Hủy xây"
 	elif building.phase == GameEnums.BuildingPhase.BUILDING:
-		actions["builder_slot"] = "Đặt ô Builder"
+		actions["builder_slot"] = "Đặt ô thợ xây"
 		actions["clear_slot"] = "Xóa job slot"
 	elif building.phase == GameEnums.BuildingPhase.ACTIVE and on_core:
 		var demolition := turn_manager.get_planned_demolition()
@@ -244,44 +244,44 @@ func _unit_at(cell: Vector2i) -> UnitState:
 func _unit_detail(unit: UnitState) -> String:
 	var status: Array[String] = []
 	if unit.away_days_left > 0:
-		status.append("away")
+		status.append("đang vắng mặt")
 	if unit.locked_by_construction:
-		status.append("construction locked")
+		status.append("đang xây")
 	if unit.locked_by_healing:
-		status.append("healing locked")
+		status.append("đang điều trị")
 	if unit.is_manager:
-		status.append("manager")
+		status.append("quản lý")
 	elif not unit.work_building_id.is_empty():
-		status.append("worker")
+		status.append("lao động")
 	elif not unit.assigned_building_id.is_empty():
-		status.append("builder")
+		status.append("thợ xây")
 	if status.is_empty():
-		status.append("idle")
+		status.append("nhàn rỗi")
 	var planned := turn_manager.get_planned_move_target(unit.id)
 	if planned != Vector2i(-1, -1):
-		status.append("planned move → %s" % _cell_name(planned))
+		status.append("đã định nước đi → %s" % _cell_name(planned))
 	var backstory := "Chưa có dữ kiện."
 	if not unit.backstory.is_empty():
 		backstory = "\n".join(unit.backstory)
 	elif not unit.memories.is_empty():
 		backstory = "\n".join(unit.memories)
-	return "Rank: %s · Faction: %s\nVị trí: %s\nTrạng thái: %s\nCông việc: %s\nBuilding: %s\n\nBACKSTORY\n%s" % [
+	return "Loại quân: %s · Phe: %s\nVị trí: %s\nTrạng thái: %s\nCông việc: %s\nCông trình: %s\n\nQUÁ KHỨ\n%s" % [
 		_rank_name(unit.rank),
 		_faction_name(unit.faction),
 		_cell_name(unit.board_cell),
 		", ".join(status),
-		"manager" if unit.is_manager else ("worker" if not unit.work_building_id.is_empty() else ("builder" if not unit.assigned_building_id.is_empty() else "—")),
+		"quản lý" if unit.is_manager else ("lao động" if not unit.work_building_id.is_empty() else ("thợ xây" if not unit.assigned_building_id.is_empty() else "—")),
 		unit.work_building_id if not unit.work_building_id.is_empty() else (unit.assigned_building_id if not unit.assigned_building_id.is_empty() else "—"),
 		backstory,
 	]
 
 
 func _rank_name(rank: int) -> String:
-	return ["Pawn", "Knight", "Rook", "Bishop", "Queen", "King"][rank]
+	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
 
 
 func _faction_name(faction: int) -> String:
-	return ["PLAYER", "ENEMY", "OUTSIDER"][faction]
+	return ["Phe ta", "Địch", "Bên ngoài"][faction]
 
 
 func _cell_name(cell: Vector2i) -> String:
