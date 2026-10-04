@@ -88,7 +88,7 @@ func open_for_cell(cell: Vector2i) -> void:
 		_planned_label(building),
 	]
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		detail += "\nChuột phải ô vận hành để đặt vị trí thợ xây, rồi kéo quân vào."
+		detail += "\nKéo trực tiếp quân vào một trong 8 ô vận hành để bắt đầu xây."
 		detail += "\nVị trí: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
 	var on_core := current_cell == building.core_cell
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT and on_core:
@@ -106,12 +106,9 @@ func open_for_cell(cell: Vector2i) -> void:
 		else:
 			actions["demolish"] = "Phá công trình"
 	elif building.phase == GameEnums.BuildingPhase.ACTIVE:
-		if building.type == GameEnums.BuildingType.FARM:
-			actions["manager_slot"] = "Đặt ô quản lý"
-			actions["farm_worker_slot"] = "Đặt ô lao động"
-		elif building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
+		if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
 			actions["workshop_manager_slot"] = "Đặt ô quản lý xưởng"
-		actions["clear_slot"] = "Xóa vị trí công việc"
+			actions["clear_slot"] = "Xóa vị trí công việc"
 	popup.open_at(board.cell_screen_position(cell), _type_name(building.type), detail, actions)
 
 
