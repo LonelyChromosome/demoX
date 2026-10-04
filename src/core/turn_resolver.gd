@@ -13,11 +13,11 @@ enum Phase {
 	COMMIT_BUILDING_PLACEMENT,
 	COMMIT_CANCEL_CONSTRUCTION,
 	COMMIT_DEMOLITION,
+	COMMIT_STAFFING,
 	RESOLVE_SYSTEMS,
 	FOOD_CONSUMPTION,
 	RESOLVE_EVENTS,
 	FINALIZE_DEMOLITION,
-	COMMIT_STAFFING,
 	FINALIZE_DAY,
 	START_NEXT_DAY,
 }
@@ -29,7 +29,9 @@ func resolve(
 	var result := TurnResolutionResult.new()
 	result.resolved_day = state.day
 	_run_phase(Phase.VALIDATE_ORDERS, result)
-	var valid_moves := _validate_moves(state, snapshot.move_orders, building_system, result)
+	var valid_moves := _validate_moves(
+		state, snapshot.move_orders, building_system, snapshot.demolish_building_order, result
+	)
 	var valid_buildings := _validate_buildings(
 		state, snapshot.building_orders, valid_moves, building_system, result
 	)
@@ -58,13 +60,13 @@ func resolve(
 	_run_phase(Phase.FOOD_CONSUMPTION, result)
 	if not food_system.resolve_consumption(state, result, building_system):
 		return result
-	_finish_resolution(state, snapshot, building_system, result)
+	_finish_resolution(state, building_system, result)
 	return result
 
 
 func resume_after_ration(
 	state: GameState,
-	snapshot: PendingOrderSnapshot,
+	_snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult,
 	fed_unit_ids: Array[String]
@@ -73,13 +75,12 @@ func resume_after_ration(
 		return result
 	if not food_system.apply_ration(state, result, fed_unit_ids, building_system):
 		return result
-	_finish_resolution(state, snapshot, building_system, result)
+	_finish_resolution(state, building_system, result)
 	return result
 
 
 func _finish_resolution(
 	state: GameState,
-	snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
@@ -107,6 +108,7 @@ func _validate_moves(
 	state: GameState,
 	orders: Array[MoveUnitOrder],
 	building_system: BuildingSystem,
+	demolition_order: DemolishBuildingOrder,
 	result: TurnResolutionResult
 ) -> Array[MoveUnitOrder]:
 	var preliminary: Array[MoveUnitOrder] = []
@@ -127,12 +129,18 @@ func _validate_moves(
 		if not building_system.is_inside_board(order.target):
 			result.reject("move", order.unit_id, "Vị trí đích nằm ngoài bàn cờ")
 			continue
-		if _occupied_by_other_unit(state, order.target, order.unit_id):
-			result.reject("move", order.unit_id, "Vị trí đích đã có quân")
-			continue
 		if building_system.is_cell_occupied_by_building(state, order.target):
-			result.reject("move", order.unit_id, "Vị trí đích là ô lõi công trình")
-			continue
+			var core_building := building_system.building_at_cell(state, order.target)
+			var is_active_farm_core := (
+				core_building != null
+				and core_building.type == GameEnums.BuildingType.FARM
+				and core_building.phase == GameEnums.BuildingPhase.ACTIVE
+				and core_building.core_cell == order.target
+				and (demolition_order == null or demolition_order.building_id != core_building.id)
+			)
+			if not is_active_farm_core:
+				result.reject("move", order.unit_id, "Ô lõi công trình không thể đi vào")
+				continue
 		preliminary.append(order)
 
 	var destination_counts := {}
@@ -145,8 +153,65 @@ func _validate_moves(
 			result.reject("move", order.unit_id, "Nhiều quân đang cùng nhắm tới một ô")
 		else:
 			valid.append(order)
-	return valid
 
+	var changed := true
+	while changed:
+		changed = false
+		var moving_ids := {}
+		for order in valid:
+			moving_ids[order.unit_id] = true
+		for index in range(valid.size() - 1, -1, -1):
+			var order := valid[index]
+			var occupant_id := _unit_id_at(state, order.target, order.unit_id)
+			if not occupant_id.is_empty() and not moving_ids.has(occupant_id):
+				result.reject("move", order.unit_id, "Ô đích vẫn còn quân")
+				valid.remove_at(index)
+				changed = true
+	return _filter_farm_capacity(state, valid, result)
+
+
+func _filter_farm_capacity(
+	state: GameState,
+	orders: Array[MoveUnitOrder],
+	result: TurnResolutionResult
+) -> Array[MoveUnitOrder]:
+	var counts := {}
+	for unit in state.units.values():
+		if not (unit is UnitState) or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		var farm := staffing_system.active_farm_at(state, unit.board_cell)
+		if farm != null:
+			counts[farm.id] = int(counts.get(farm.id, 0)) + 1
+
+	for order in orders:
+		var unit := state.units.get(order.unit_id) as UnitState
+		if unit == null or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		var origin_farm := staffing_system.active_farm_at(state, order.origin)
+		var target_farm := staffing_system.active_farm_at(state, order.target)
+		if origin_farm != null and (target_farm == null or target_farm.id != origin_farm.id):
+			counts[origin_farm.id] = maxi(0, int(counts.get(origin_farm.id, 0)) - 1)
+
+	var accepted: Array[MoveUnitOrder] = []
+	for order in orders:
+		var unit := state.units.get(order.unit_id) as UnitState
+		var origin_farm := staffing_system.active_farm_at(state, order.origin)
+		var target_farm := staffing_system.active_farm_at(state, order.target)
+		var enters_new_farm := (
+			unit != null
+			and unit.faction == GameEnums.Faction.PLAYER
+			and target_farm != null
+			and (origin_farm == null or origin_farm.id != target_farm.id)
+		)
+		if enters_new_farm and int(counts.get(target_farm.id, 0)) >= StaffingSystem.MAX_FARM_STAFF:
+			result.reject("move", order.unit_id, "Nông trại đã đủ 6 người")
+			if origin_farm != null:
+				counts[origin_farm.id] = int(counts.get(origin_farm.id, 0)) + 1
+			continue
+		if enters_new_farm:
+			counts[target_farm.id] = int(counts.get(target_farm.id, 0)) + 1
+		accepted.append(order)
+	return accepted
 
 func _validate_buildings(
 	state: GameState,
@@ -200,11 +265,11 @@ func _validate_buildings(
 	return valid
 
 
-func _occupied_by_other_unit(state: GameState, cell: Vector2i, moving_unit_id: String) -> bool:
+func _unit_id_at(state: GameState, cell: Vector2i, moving_unit_id: String) -> String:
 	for candidate in state.units.values():
 		if candidate is UnitState and candidate.id != moving_unit_id and candidate.board_cell == cell:
-			return true
-	return false
+			return candidate.id
+	return ""
 
 
 func _commit_moves(
