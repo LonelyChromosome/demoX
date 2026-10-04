@@ -37,7 +37,7 @@ func _ready() -> void:
 	add_child(title)
 
 	var hint := Label.new()
-	hint.text = "Core ở giữa, 8 ô vận hành xung quanh"
+	hint.text = "Ô lõi ở giữa, 8 ô vận hành xung quanh"
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(hint)
 
@@ -54,7 +54,7 @@ func _ready() -> void:
 	builders_title.add_theme_font_size_override("font_size", 18)
 	add_child(builders_title)
 	builder_status_label = Label.new()
-	builder_status_label.text = "Đã chọn 0 builder"
+	builder_status_label.text = "Đã chọn 0 thợ xây"
 	add_child(builder_status_label)
 
 	var cancel_button := Button.new()
@@ -66,11 +66,11 @@ func _ready() -> void:
 	cancel_construction_button.pressed.connect(func() -> void: cancel_construction_requested.emit())
 	add_child(cancel_construction_button)
 	var reassign_button := Button.new()
-	reassign_button.text = "Gán builder đã chọn"
+	reassign_button.text = "Gán thợ xây đã chọn"
 	reassign_button.pressed.connect(func() -> void: reassign_builder_requested.emit())
 	add_child(reassign_button)
 	var demolition_button := Button.new()
-	demolition_button.text = "Phá ACTIVE hiện tại"
+	demolition_button.text = "Phá công trình đang hoạt động"
 	demolition_button.pressed.connect(func() -> void: demolition_requested.emit())
 	add_child(demolition_button)
 	var demolition_cancel_button := Button.new()
@@ -121,7 +121,7 @@ func set_status(text: String) -> void:
 
 func set_builder_status(count: int) -> void:
 	if builder_status_label != null:
-		builder_status_label.text = "Đã chọn %d builder" % count
+		builder_status_label.text = "Đã chọn %d thợ xây" % count
 
 
 func set_staffing_status(text: String) -> void:
