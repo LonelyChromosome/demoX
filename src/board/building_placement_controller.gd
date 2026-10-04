@@ -48,6 +48,13 @@ func cancel() -> void:
 	_refresh_view()
 
 
+func undo_current() -> bool:
+	if not placement.is_active() and placement.planned_building == null:
+		return false
+	cancel()
+	return true
+
+
 func _on_cell_hovered(cell: Vector2i) -> void:
 	if not placement.is_active():
 		return
