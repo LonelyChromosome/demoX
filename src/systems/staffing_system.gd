@@ -43,17 +43,17 @@ func validate_orders(
 	var planned_owner := {}
 	for order in orders:
 		if order == null:
-			result.reject("staffing", "", "Order is missing")
+			result.reject("staffing", "", "Lệnh không còn tồn tại")
 			continue
 		var building := state.buildings.get(order.building_id) as BuildingState
 		if building == null:
-			result.reject("staffing", order.building_id, "Building không tồn tại")
+			result.reject("staffing", order.building_id, "Công trình không tồn tại")
 			continue
 		if building.phase != GameEnums.BuildingPhase.ACTIVE:
-			result.reject("staffing", order.building_id, "Chỉ được staff building ACTIVE")
+			result.reject("staffing", order.building_id, "Chỉ được phân công tại công trình đang hoạt động")
 			continue
 		if building.type not in [GameEnums.BuildingType.FARM, GameEnums.BuildingType.MATERIAL_WORKSHOP]:
-			result.reject("staffing", order.building_id, "Building này chưa hỗ trợ staffing")
+			result.reject("staffing", order.building_id, "Công trình này chưa hỗ trợ phân công")
 			continue
 
 		var manager_id := order.manager_unit_id
@@ -73,7 +73,7 @@ func validate_orders(
 			if not has_explicit_slots:
 				normalized_slots[manager.board_cell] = manager_role
 			elif normalized_slots.get(manager.board_cell, GameEnums.JobRole.NONE) != manager_role:
-				result.reject("staffing", order.building_id, "Manager chưa đứng đúng role slot")
+				result.reject("staffing", order.building_id, "Quản lý chưa đứng đúng vị trí công việc")
 				continue
 
 		var workers: Array[String] = []
@@ -95,7 +95,7 @@ func validate_orders(
 				if not has_explicit_slots:
 					normalized_slots[worker.board_cell] = GameEnums.JobRole.FARM_WORKER
 				elif normalized_slots.get(worker.board_cell, GameEnums.JobRole.NONE) != GameEnums.JobRole.FARM_WORKER:
-					result.reject("staffing", order.building_id, "Worker chưa đứng đúng role slot")
+					result.reject("staffing", order.building_id, "Lao động chưa đứng đúng vị trí công việc")
 					workers.clear()
 					invalid_worker = true
 					break
@@ -115,7 +115,7 @@ func validate_orders(
 				conflicts = true
 				break
 		if conflicts:
-			result.reject("staffing", order.building_id, "Một unit không thể staff hai building")
+			result.reject("staffing", order.building_id, "Một quân không thể làm việc tại hai công trình")
 			continue
 		for unit_id in assigned_ids:
 			planned_owner[unit_id] = order.building_id
@@ -256,18 +256,18 @@ func _validate_unit(
 ) -> Dictionary:
 	var unit := state.units.get(unit_id) as UnitState
 	if unit == null:
-		return {"valid": false, "reason": "Unit không tồn tại"}
+		return {"valid": false, "reason": "Quân cờ không tồn tại"}
 	if unit.faction != GameEnums.Faction.PLAYER:
-		return {"valid": false, "reason": "Chỉ PLAYER được staff"}
+		return {"valid": false, "reason": "Chỉ quân phe ta mới được phân công"}
 	if manager and unit.rank == GameEnums.Rank.KING:
-		return {"valid": false, "reason": "King không được làm manager"}
+		return {"valid": false, "reason": "Vua không được làm quản lý"}
 	if unit.locked_by_construction:
-		return {"valid": false, "reason": "Unit đang bị construction-lock"}
+		return {"valid": false, "reason": "Quân đang bị khóa vì xây dựng"}
 	if unit.locked_by_healing or unit.away_days_left > 0:
-		return {"valid": false, "reason": "Unit hiện không thể staff"}
+		return {"valid": false, "reason": "Quân hiện không thể nhận công việc"}
 	if not is_operational_square(building, unit.board_cell):
-		return {"valid": false, "reason": "Unit phải ở operational square"}
-	return {"valid": true, "reason": "Unit hợp lệ"}
+		return {"valid": false, "reason": "Quân phải đứng trong vùng vận hành"}
+	return {"valid": true, "reason": "Quân hợp lệ"}
 
 
 func _supports_staffing(building: BuildingState) -> bool:
