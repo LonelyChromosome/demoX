@@ -386,8 +386,10 @@ func _draw_building(building: BuildingState, origin: Vector2, tile: float, ghost
 			color = Color(color.r, color.g, color.b, 0.38 * planned_building_alpha)
 		else:
 			color = Color(0.94, 0.24, 0.2, 0.48 * planned_building_alpha)
+	elif building.phase == GameEnums.BuildingPhase.BLUEPRINT:
+		color.a = 0.42
 	elif building.phase == GameEnums.BuildingPhase.BUILDING:
-		color.a = 0.72
+		color.a = 0.62
 	elif building.phase == GameEnums.BuildingPhase.DEMOLISHING:
 		color.a = 0.42
 	for cell in building_system.operational_cells(building.core_cell):
@@ -395,7 +397,11 @@ func _draw_building(building: BuildingState, origin: Vector2, tile: float, ghost
 		var area_alpha := (0.06 * planned_building_alpha) if ghost else 0.045
 		draw_rect(rect, Color(color.r, color.g, color.b, area_alpha))
 		draw_rect(rect, Color(color.r, color.g, color.b, 0.32 if ghost else 0.2), false, 1.0)
-	_draw_core_marker(building, origin, tile, color, ghost)
+	var translucent := ghost or building.phase in [
+		GameEnums.BuildingPhase.BLUEPRINT,
+		GameEnums.BuildingPhase.BUILDING,
+	]
+	_draw_core_marker(building, origin, tile, color, translucent)
 	var core_rect := _cell_rect(building.core_cell, origin, tile).grow(-tile * 0.25)
 	if building.phase == GameEnums.BuildingPhase.BUILDING:
 		draw_line(core_rect.position, core_rect.end, Color(1, 1, 1, 0.42), 2.0)
@@ -468,7 +474,7 @@ func _draw_core_marker(
 	)
 
 	var phase_text := ""
-	if ghost or building.phase == GameEnums.BuildingPhase.BLUEPRINT:
+	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
 		phase_text = "DỰ KIẾN"
 	elif building.phase == GameEnums.BuildingPhase.BUILDING:
 		phase_text = "ĐANG XÂY"
