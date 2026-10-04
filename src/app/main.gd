@@ -71,13 +71,19 @@ func _build_shell() -> void:
 	root.add_child(content)
 
 	board = BoardView.new()
-	board.custom_minimum_size = Vector2(760, 760)
+	board.custom_minimum_size = Vector2(560, 0)
 	board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	board.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(board)
 
+	var palette_scroll := ScrollContainer.new()
+	palette_scroll.custom_minimum_size.x = 270
+	palette_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(palette_scroll)
+
 	building_palette = BuildingPalette.new()
-	content.add_child(building_palette)
+	building_palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	palette_scroll.add_child(building_palette)
 
 	report_panel = ReportPanel.new()
 	report_panel.visible = false
