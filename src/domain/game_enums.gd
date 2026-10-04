@@ -4,6 +4,8 @@ extends RefCounted
 enum Rank { PAWN, KNIGHT, ROOK, BISHOP, QUEEN, KING }
 enum Faction { PLAYER, ENEMY, OUTSIDER }
 enum BuildingType { FARM, MATERIAL_WORKSHOP, PRISON, INFIRMARY, BARRACKS }
-enum BuildingPhase { BUILDING, ACTIVE }
-enum RebellionLevel { NONE = -1, DISSATISFIED = 0, LOW_OUTPUT = 1, OBJECTS_BUT_OBEYS = 2, RESISTS = 3, REVOLT = 4 }
+enum BuildingPhase { BLUEPRINT, BUILDING, ACTIVE }
+enum RebellionLevel {
+	NONE = -1, DISSATISFIED = 0, LOW_OUTPUT = 1, OBJECTS_BUT_OBEYS = 2, RESISTS = 3, REVOLT = 4
+}
 enum CityState { LOW, MEDIUM, HIGH }

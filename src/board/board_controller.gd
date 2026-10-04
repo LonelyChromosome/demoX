@@ -7,6 +7,7 @@ var view: BoardView
 
 var selected_unit_id := ""
 var dragged_unit_id := ""
+var input_enabled := true
 
 
 func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -> void:
@@ -21,6 +22,8 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -
 
 
 func _on_cell_pressed(cell: Vector2i) -> void:
+	if not input_enabled:
+		return
 	var unit := _player_unit_at(cell)
 	if unit != null:
 		selected_unit_id = unit.id
@@ -33,6 +36,9 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 
 
 func _on_cell_released(cell: Vector2i) -> void:
+	if not input_enabled:
+		dragged_unit_id = ""
+		return
 	if dragged_unit_id.is_empty():
 		return
 
@@ -91,3 +97,11 @@ func _on_day_resolved(_day: int) -> void:
 func _refresh_view() -> void:
 	if view != null:
 		view.present(state.units, selected_unit_id)
+
+
+func set_input_enabled(enabled: bool) -> void:
+	input_enabled = enabled
+	if not enabled:
+		selected_unit_id = ""
+		dragged_unit_id = ""
+		_refresh_view()

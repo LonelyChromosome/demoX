@@ -4,6 +4,8 @@ var game_state := GameState.new()
 var turn_manager := TurnManager.new()
 var board: BoardView
 var board_controller: BoardController
+var building_palette: BuildingPalette
+var building_placement_controller: BuildingPlacementController
 var report_panel: ReportPanel
 var day_label: Label
 
@@ -16,6 +18,10 @@ func _ready() -> void:
 	board_controller = BoardController.new()
 	add_child(board_controller)
 	board_controller.setup(game_state, turn_manager, board)
+	building_placement_controller = BuildingPlacementController.new()
+	add_child(building_placement_controller)
+	building_placement_controller.setup(game_state, turn_manager, board, building_palette)
+	building_placement_controller.placement_mode_changed.connect(_on_placement_mode_changed)
 	turn_manager.day_started.connect(_on_day_started)
 	_refresh_header()
 
@@ -64,6 +70,9 @@ func _build_shell() -> void:
 	board.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(board)
 
+	building_palette = BuildingPalette.new()
+	content.add_child(building_palette)
+
 	report_panel = ReportPanel.new()
 	report_panel.visible = false
 	content.add_child(report_panel)
@@ -100,6 +109,10 @@ func _end_day() -> void:
 
 func _on_day_started(_day: int) -> void:
 	_refresh_header()
+
+
+func _on_placement_mode_changed(active: bool) -> void:
+	board_controller.set_input_enabled(not active)
 
 
 func _refresh_header() -> void:

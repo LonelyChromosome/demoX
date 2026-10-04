@@ -1,23 +1,46 @@
 class_name BuildingSystem
 extends RefCounted
 
-const BASE_BUILD_DAYS := {
-	GameEnums.BuildingType.FARM: 2,
-	GameEnums.BuildingType.MATERIAL_WORKSHOP: 2,
-	GameEnums.BuildingType.PRISON: 2,
-	GameEnums.BuildingType.INFIRMARY: 3,
-	GameEnums.BuildingType.BARRACKS: 4,
-}
+const BOARD_SIZE := 8
 
-func build_days(type: GameEnums.BuildingType, has_extra_labor: bool) -> int:
-	var days: int = BASE_BUILD_DAYS[type]
-	return maxi(days - (1 if has_extra_labor else 0), 1)
 
-func is_valid_core_cell(cell: Vector2i, occupied: Dictionary) -> bool:
-	if cell.x <= 0 or cell.y <= 0 or cell.x >= 7 or cell.y >= 7:
-		return false
-	for y in range(cell.y - 1, cell.y + 2):
-		for x in range(cell.x - 1, cell.x + 2):
-			if occupied.has(Vector2i(x, y)):
-				return false
-	return true
+func footprint(core_cell: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for y in range(core_cell.y - 1, core_cell.y + 2):
+		for x in range(core_cell.x - 1, core_cell.x + 2):
+			cells.append(Vector2i(x, y))
+	return cells
+
+
+func validate_placement(state: GameState, core_cell: Vector2i) -> Dictionary:
+	var cells := footprint(core_cell)
+	for cell in cells:
+		if not _is_inside_board(cell):
+			return {"valid": false, "reason": "Vùng 3x3 vượt khỏi bàn cờ"}
+
+	var occupied_by_buildings := _building_cells(state.buildings)
+	for cell in cells:
+		if occupied_by_buildings.has(cell):
+			return {"valid": false, "reason": "Trùng vùng công trình khác"}
+
+	for candidate in state.units.values():
+		if not (candidate is UnitState):
+			continue
+		if candidate.board_cell in cells or candidate.planned_cell in cells:
+			return {"valid": false, "reason": "Xung đột vị trí quân cờ"}
+
+	return {"valid": true, "reason": "Vị trí hợp lệ"}
+
+
+func _building_cells(buildings: Dictionary) -> Dictionary:
+	var occupied := {}
+	for candidate in buildings.values():
+		if not (candidate is BuildingState):
+			continue
+		for cell in footprint(candidate.core_cell):
+			occupied[cell] = true
+	return occupied
+
+
+func _is_inside_board(cell: Vector2i) -> bool:
+	return cell.x >= 0 and cell.y >= 0 and cell.x < BOARD_SIZE and cell.y < BOARD_SIZE
