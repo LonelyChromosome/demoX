@@ -103,6 +103,19 @@ func _player_unit_at(cell: Vector2i) -> UnitState:
 	return null
 
 
+func undo_current() -> bool:
+	if selected_unit_id.is_empty():
+		return false
+
+	var unit := state.units.get(selected_unit_id) as UnitState
+	if unit != null and unit.planned_cell != Vector2i(-1, -1):
+		turn_manager.cancel_move(unit.id)
+		unit.planned_cell = Vector2i(-1, -1)
+
+	_clear_selection()
+	return true
+
+
 func _clear_selection() -> void:
 	selected_unit_id = ""
 	dragged_unit_id = ""
