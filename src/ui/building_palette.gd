@@ -13,11 +13,11 @@ signal staffing_workers_requested
 signal staffing_cancel_requested
 
 const BUILDINGS := [
-	["Farm", GameEnums.BuildingType.FARM],
-	["Material Workshop", GameEnums.BuildingType.MATERIAL_WORKSHOP],
-	["Prison", GameEnums.BuildingType.PRISON],
-	["Infirmary / Y", GameEnums.BuildingType.INFIRMARY],
-	["Barracks", GameEnums.BuildingType.BARRACKS],
+	["Nông trại", GameEnums.BuildingType.FARM],
+	["Xưởng vật tư", GameEnums.BuildingType.MATERIAL_WORKSHOP],
+	["Nhà giam", GameEnums.BuildingType.PRISON],
+	["Y xá", GameEnums.BuildingType.INFIRMARY],
+	["Doanh trại", GameEnums.BuildingType.BARRACKS],
 ]
 
 var status_label: Label
@@ -32,7 +32,7 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 8)
 
 	var title := Label.new()
-	title.text = "BUILDING 3x3"
+	title.text = "CÔNG TRÌNH 3×3"
 	title.add_theme_font_size_override("font_size", 22)
 	add_child(title)
 
@@ -50,7 +50,7 @@ func _ready() -> void:
 		add_child(button)
 
 	var builders_title := Label.new()
-	builders_title.text = "BUILDERS"
+	builders_title.text = "THỢ XÂY"
 	builders_title.add_theme_font_size_override("font_size", 18)
 	add_child(builders_title)
 	builder_status_label = Label.new()
@@ -58,7 +58,7 @@ func _ready() -> void:
 	add_child(builder_status_label)
 
 	var cancel_button := Button.new()
-	cancel_button.text = "Cancel planned building"
+	cancel_button.text = "Hủy công trình dự kiến"
 	cancel_button.pressed.connect(func() -> void: cancel_requested.emit())
 	add_child(cancel_button)
 	var cancel_construction_button := Button.new()
@@ -78,19 +78,19 @@ func _ready() -> void:
 	demolition_cancel_button.pressed.connect(func() -> void: demolition_cancel_requested.emit())
 	add_child(demolition_cancel_button)
 	var staffing_title := Label.new()
-	staffing_title.text = "STAFFING TEST"
+	staffing_title.text = "PHÂN CÔNG"
 	staffing_title.add_theme_font_size_override("font_size", 18)
 	add_child(staffing_title)
 	var manager_button := Button.new()
-	manager_button.text = "Gán selected làm manager"
+	manager_button.text = "Gán quân đã chọn làm quản lý"
 	manager_button.pressed.connect(func() -> void: staffing_manager_requested.emit())
 	add_child(manager_button)
 	var worker_button := Button.new()
-	worker_button.text = "Gán selected làm Farm worker"
+	worker_button.text = "Gán quân đã chọn làm lao động"
 	worker_button.pressed.connect(func() -> void: staffing_workers_requested.emit())
 	add_child(worker_button)
 	var staffing_cancel_button := Button.new()
-	staffing_cancel_button.text = "Hủy planned staffing"
+	staffing_cancel_button.text = "Hủy phân công dự kiến"
 	staffing_cancel_button.pressed.connect(func() -> void: staffing_cancel_requested.emit())
 	add_child(staffing_cancel_button)
 	staffing_status_label = Label.new()
@@ -141,7 +141,7 @@ func set_available_builders(units: Dictionary) -> void:
 		):
 			continue
 		var button := Button.new()
-		button.text = "%s (%s)" % [unit.display_name if not unit.display_name.is_empty() else unit.id, "builder"]
+		button.text = "%s (%s)" % [unit.display_name if not unit.display_name.is_empty() else unit.id, "thợ xây"]
 		button.toggle_mode = true
 		button.pressed.connect(_emit_builder_selection)
 		builder_buttons[unit.id] = button
