@@ -6,6 +6,8 @@ signal cancel_requested
 signal builder_selection_changed(builder_ids: Array[String])
 signal cancel_construction_requested
 signal reassign_builder_requested
+signal demolition_requested
+signal demolition_cancel_requested
 
 const BUILDINGS := [
 	["Farm", GameEnums.BuildingType.FARM],
@@ -63,6 +65,14 @@ func _ready() -> void:
 	reassign_button.text = "Gán builder đã chọn"
 	reassign_button.pressed.connect(func() -> void: reassign_builder_requested.emit())
 	add_child(reassign_button)
+	var demolition_button := Button.new()
+	demolition_button.text = "Phá ACTIVE hiện tại"
+	demolition_button.pressed.connect(func() -> void: demolition_requested.emit())
+	add_child(demolition_button)
+	var demolition_cancel_button := Button.new()
+	demolition_cancel_button.text = "Hủy lệnh phá"
+	demolition_cancel_button.pressed.connect(func() -> void: demolition_cancel_requested.emit())
+	add_child(demolition_cancel_button)
 
 	status_label = Label.new()
 	status_label.text = "Chọn một loại công trình"

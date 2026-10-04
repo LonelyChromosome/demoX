@@ -8,8 +8,10 @@ enum Phase {
 	COMMIT_MOVEMENT,
 	COMMIT_BUILDING_PLACEMENT,
 	COMMIT_CANCEL_CONSTRUCTION,
+	COMMIT_DEMOLITION,
 	RESOLVE_SYSTEMS,
 	RESOLVE_EVENTS,
+	FINALIZE_DEMOLITION,
 	FINALIZE_DAY,
 	START_NEXT_DAY,
 }
@@ -26,6 +28,9 @@ func resolve(
 		state, snapshot.building_order, valid_moves, building_system, result
 	)
 	var valid_cancel := _validate_cancel(state, snapshot.cancel_construction_order, result)
+	var valid_demolition := _validate_demolition(
+		state, snapshot.demolish_building_order, building_system, result
+	)
 
 	_run_phase(Phase.COMMIT_MOVEMENT, result)
 	_commit_moves(state, valid_moves, result)
@@ -37,10 +42,16 @@ func resolve(
 	_commit_cancel(state, valid_cancel, building_system, result)
 	_commit_reassignments(state, snapshot.assign_builder_orders, building_system, result)
 
+	_run_phase(Phase.COMMIT_DEMOLITION, result)
+	_commit_demolition(state, valid_demolition, building_system, result)
+
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
 	_run_phase(Phase.RESOLVE_EVENTS, result)
 	_resolve_events(state, result)
+
+	_run_phase(Phase.FINALIZE_DEMOLITION, result)
+	_finalize_demolition(state, building_system, result)
 
 	_run_phase(Phase.FINALIZE_DAY, result)
 	state.day_one_full_knowledge = false
@@ -226,6 +237,40 @@ func _commit_reassignments(
 			result.reject("assign_builder", order.unit_id, assignment.reason)
 		else:
 			result.reassigned_builder_ids.append(order.unit_id)
+
+func _validate_demolition(
+	state: GameState,
+	order: DemolishBuildingOrder,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> DemolishBuildingOrder:
+	if order == null:
+		return null
+	var validation := building_system.validate_demolition(state, order.building_id)
+	if not validation.valid:
+		result.reject("demolition", order.building_id, validation.reason)
+		return null
+	return order
+
+func _commit_demolition(
+	state: GameState,
+	order: DemolishBuildingOrder,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> void:
+	if order == null:
+		return
+	if building_system.start_demolition(state, order.building_id):
+		result.demolishing_building_ids.append(order.building_id)
+	else:
+		result.reject("demolition", order.building_id, "Demolition đã thay đổi")
+
+func _finalize_demolition(
+	state: GameState, building_system: BuildingSystem, result: TurnResolutionResult
+) -> void:
+	for building_id in result.demolishing_building_ids:
+		if building_system.finalize_demolition(state, building_id):
+			result.demolished_building_ids.append(building_id)
 
 
 func _resolve_events(_state: GameState, _result: TurnResolutionResult) -> void:

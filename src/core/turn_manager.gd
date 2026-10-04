@@ -69,6 +69,18 @@ func queue_assign_builder(building_id: String, unit_id: String) -> AssignBuilder
 		return null
 	return order_queue.plan_assign_builder(building_id, unit_id)
 
+func queue_demolition(building_id: String) -> DemolishBuildingOrder:
+	if not can_edit_orders():
+		return null
+	return order_queue.plan_demolition(building_id)
+
+func cancel_demolition() -> void:
+	if can_edit_orders():
+		order_queue.cancel_demolition()
+
+func get_planned_demolition() -> DemolishBuildingOrder:
+	return order_queue.get_demolition()
+
 
 func clear_orders() -> void:
 	if can_edit_orders():

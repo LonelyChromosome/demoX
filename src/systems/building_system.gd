@@ -125,6 +125,29 @@ func cancel_construction(state: GameState, building_id: String) -> int:
 	state.materials += refund
 	return refund
 
+func validate_demolition(state: GameState, building_id: String) -> Dictionary:
+	var building := state.buildings.get(building_id) as BuildingState
+	if building == null:
+		return {"valid": false, "reason": "Building không tồn tại"}
+	if building.phase != GameEnums.BuildingPhase.ACTIVE:
+		return {"valid": false, "reason": "Chỉ được phá building ACTIVE"}
+	return {"valid": true, "reason": "Có thể phá"}
+
+func start_demolition(state: GameState, building_id: String) -> bool:
+	var validation := validate_demolition(state, building_id)
+	if not validation.valid:
+		return false
+	var building := state.buildings.get(building_id) as BuildingState
+	building.phase = GameEnums.BuildingPhase.DEMOLISHING
+	return true
+
+func finalize_demolition(state: GameState, building_id: String) -> bool:
+	var building := state.buildings.get(building_id) as BuildingState
+	if building == null or building.phase != GameEnums.BuildingPhase.DEMOLISHING:
+		return false
+	state.buildings.erase(building_id)
+	return true
+
 
 func unlock_builders(state: GameState, building_ids: Array[String]) -> void:
 	for building_id in building_ids:
