@@ -211,6 +211,38 @@ func get_job_slot_at(cell: Vector2i) -> Dictionary:
 			return {"building_id": candidate.id, "role": slots[cell]}
 	return {}
 
+func get_construction_building_at(cell: Vector2i) -> BuildingState:
+	var planned := get_planned_building_at_cell(cell)
+	if (
+		planned != null
+		and cell != planned.core_cell
+		and planned.phase == GameEnums.BuildingPhase.BLUEPRINT
+	):
+		return planned
+	var committed := building_system.building_at_cell(state, cell)
+	if (
+		committed != null
+		and cell != committed.core_cell
+		and committed.phase in [GameEnums.BuildingPhase.BLUEPRINT, GameEnums.BuildingPhase.BUILDING]
+	):
+		return committed
+	return null
+
+
+func plan_construction_drop(unit_id: String, cell: Vector2i) -> bool:
+	if not can_edit_orders():
+		return false
+	var building := get_construction_building_at(cell)
+	var unit := state.units.get(unit_id) as UnitState
+	if building == null or unit == null or not unit.can_be_builder():
+		return false
+	order_queue.plan_job_slot(building.id, cell, GameEnums.JobRole.BUILDER)
+	var planned := get_planned_building(building.id)
+	if planned != null:
+		return order_queue.add_planned_builder(building.id, unit_id, cell)
+	return queue_assign_builder(building.id, unit_id, cell) != null
+
+
 func plan_job_drop(unit_id: String, cell: Vector2i) -> bool:
 	if not can_edit_orders():
 		return false
