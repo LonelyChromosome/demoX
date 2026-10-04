@@ -1,0 +1,7 @@
+.godot/
+build/
+dist/
+*.tmp
+*.log
+.DS_Store
+Thumbs.db

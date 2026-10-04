@@ -22,15 +22,3 @@ window/stretch/mode="canvas_items"
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-textures/default_filters/use_nearest_mipmap_filter=false
-
-[input]
-
-end_day={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":32,"unicode":32)]
-}
-cancel_order={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":4194305)]
-}
