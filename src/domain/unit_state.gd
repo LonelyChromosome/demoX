@@ -16,6 +16,7 @@ var healing_days_left := 0
 var hunger_streak := 0
 
 var assigned_building_id := ""
+var work_building_id := ""
 var is_manager := false
 var locked_by_construction := false
 var locked_by_healing := false
@@ -41,6 +42,7 @@ func can_be_builder() -> bool:
 		faction == GameEnums.Faction.PLAYER
 		and rank != GameEnums.Rank.KING
 		and assigned_building_id.is_empty()
+		and work_building_id.is_empty()
 		and not locked_by_construction
 		and not locked_by_healing
 		and away_days_left <= 0

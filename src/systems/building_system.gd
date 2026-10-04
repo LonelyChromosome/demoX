@@ -51,6 +51,7 @@ func validate_builders(state: GameState, builder_ids: Array[String]) -> Dictiona
 
 func assign_construction(building: BuildingState, builder_ids: Array[String]) -> void:
 	building.builder_unit_ids = builder_ids.duplicate()
+	building.worker_unit_ids.clear()
 	building.phase = GameEnums.BuildingPhase.BUILDING
 	building.days_left = build_days(building.type, builder_ids.size())
 

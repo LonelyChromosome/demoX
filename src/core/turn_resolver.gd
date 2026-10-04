@@ -5,6 +5,7 @@ signal phase_started(phase: Phase)
 
 var food_system := FoodSystem.new()
 var material_system := MaterialSystem.new()
+var staffing_system := StaffingSystem.new()
 
 enum Phase {
 	VALIDATE_ORDERS,
@@ -15,6 +16,7 @@ enum Phase {
 	RESOLVE_SYSTEMS,
 	RESOLVE_EVENTS,
 	FINALIZE_DEMOLITION,
+	COMMIT_STAFFING,
 	FINALIZE_DAY,
 	START_NEXT_DAY,
 }
@@ -56,6 +58,10 @@ func resolve(
 	_run_phase(Phase.FINALIZE_DEMOLITION, result)
 	_finalize_demolition(state, building_system, result)
 
+	_run_phase(Phase.COMMIT_STAFFING, result)
+	var valid_staffing := staffing_system.validate_orders(state, snapshot.staffing_orders, result)
+	staffing_system.commit(state, valid_staffing, result)
+
 	_run_phase(Phase.FINALIZE_DAY, result)
 	state.day_one_full_knowledge = false
 	if state.day < GameState.MAX_DAYS:
@@ -94,7 +100,10 @@ func _validate_moves(
 		if _occupied_by_other_unit(state, order.target, order.unit_id):
 			result.reject("move", order.unit_id, "Target is occupied")
 			continue
-		if building_system.is_cell_occupied_by_building(state, order.target):
+		if (
+			building_system.is_cell_occupied_by_building(state, order.target)
+			and not staffing_system.is_operational_cell_available(state, order.target)
+		):
 			result.reject("move", order.unit_id, "Target is inside a building area")
 			continue
 		preliminary.append(order)

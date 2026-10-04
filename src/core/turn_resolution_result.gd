@@ -16,6 +16,7 @@ var refunded_materials := 0
 var reassigned_builder_ids: Array[String] = []
 var demolishing_building_ids: Array[String] = []
 var demolished_building_ids: Array[String] = []
+var staffing_committed_building_ids: Array[String] = []
 var rejected_orders: Array[Dictionary] = []
 
 

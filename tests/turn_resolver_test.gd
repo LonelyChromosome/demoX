@@ -33,6 +33,7 @@ func _test_move_commit_replace_cancel_and_ghost_clear() -> void:
 		TurnResolver.Phase.RESOLVE_SYSTEMS,
 		TurnResolver.Phase.RESOLVE_EVENTS,
 		TurnResolver.Phase.FINALIZE_DEMOLITION,
+		TurnResolver.Phase.COMMIT_STAFFING,
 		TurnResolver.Phase.FINALIZE_DAY,
 		TurnResolver.Phase.START_NEXT_DAY,
 	]

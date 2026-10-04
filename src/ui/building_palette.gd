@@ -8,6 +8,9 @@ signal cancel_construction_requested
 signal reassign_builder_requested
 signal demolition_requested
 signal demolition_cancel_requested
+signal staffing_manager_requested
+signal staffing_workers_requested
+signal staffing_cancel_requested
 
 const BUILDINGS := [
 	["Farm", GameEnums.BuildingType.FARM],
@@ -19,6 +22,7 @@ const BUILDINGS := [
 
 var status_label: Label
 var builder_status_label: Label
+var staffing_status_label: Label
 var buttons: Dictionary = {}
 var builder_buttons: Dictionary = {}
 
@@ -73,6 +77,25 @@ func _ready() -> void:
 	demolition_cancel_button.text = "Hủy lệnh phá"
 	demolition_cancel_button.pressed.connect(func() -> void: demolition_cancel_requested.emit())
 	add_child(demolition_cancel_button)
+	var staffing_title := Label.new()
+	staffing_title.text = "STAFFING TEST"
+	staffing_title.add_theme_font_size_override("font_size", 18)
+	add_child(staffing_title)
+	var manager_button := Button.new()
+	manager_button.text = "Gán selected làm manager"
+	manager_button.pressed.connect(func() -> void: staffing_manager_requested.emit())
+	add_child(manager_button)
+	var worker_button := Button.new()
+	worker_button.text = "Gán selected làm Farm worker"
+	worker_button.pressed.connect(func() -> void: staffing_workers_requested.emit())
+	add_child(worker_button)
+	var staffing_cancel_button := Button.new()
+	staffing_cancel_button.text = "Hủy planned staffing"
+	staffing_cancel_button.pressed.connect(func() -> void: staffing_cancel_requested.emit())
+	add_child(staffing_cancel_button)
+	staffing_status_label = Label.new()
+	staffing_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(staffing_status_label)
 
 	status_label = Label.new()
 	status_label.text = "Chọn một loại công trình"
@@ -99,6 +122,11 @@ func set_status(text: String) -> void:
 func set_builder_status(count: int) -> void:
 	if builder_status_label != null:
 		builder_status_label.text = "Đã chọn %d builder" % count
+
+
+func set_staffing_status(text: String) -> void:
+	if staffing_status_label != null:
+		staffing_status_label.text = text
 
 
 func set_available_builders(units: Dictionary) -> void:

@@ -81,6 +81,24 @@ func cancel_demolition() -> void:
 func get_planned_demolition() -> DemolishBuildingOrder:
 	return order_queue.get_demolition()
 
+func queue_staffing(
+	building_id: String, manager_unit_id := "", worker_unit_ids: Array[String] = []
+) -> SetBuildingStaffOrder:
+	if not can_edit_orders():
+		return null
+	var order := SetBuildingStaffOrder.new(
+		building_id, manager_unit_id, worker_unit_ids, state.day
+	)
+	order_queue.plan_staffing(order)
+	return order
+
+func cancel_staffing(building_id: String) -> void:
+	if can_edit_orders():
+		order_queue.cancel_staffing(building_id)
+
+func get_planned_staffing(building_id: String) -> SetBuildingStaffOrder:
+	return order_queue.get_staffing(building_id)
+
 
 func clear_orders() -> void:
 	if can_edit_orders():

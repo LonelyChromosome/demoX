@@ -10,6 +10,7 @@ var dragged_unit_id := ""
 var input_enabled := true
 var resolving := false
 var building_system := BuildingSystem.new()
+var staffing_system := StaffingSystem.new()
 
 
 func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -> void:
@@ -93,7 +94,10 @@ func _plan_move(unit_id: String, target: Vector2i) -> void:
 
 
 func _is_free_target(cell: Vector2i, moving_unit_id: String) -> bool:
-	if building_system.is_cell_occupied_by_building(state, cell):
+	if (
+		building_system.is_cell_occupied_by_building(state, cell)
+		and not staffing_system.is_operational_cell_available(state, cell)
+	):
 		return false
 	var planned_targets := turn_manager.get_planned_move_targets()
 	for candidate in state.units.values():

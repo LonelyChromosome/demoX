@@ -33,6 +33,9 @@ func setup(
 	palette.reassign_builder_requested.connect(reassign_selected_builder)
 	palette.demolition_requested.connect(plan_demolition_current)
 	palette.demolition_cancel_requested.connect(cancel_planned_demolition)
+	palette.staffing_manager_requested.connect(plan_staffing_manager)
+	palette.staffing_workers_requested.connect(plan_staffing_workers)
+	palette.staffing_cancel_requested.connect(cancel_planned_staffing)
 	palette.set_available_builders(state.units)
 	palette.set_builder_status(0)
 	turn_manager.resolution_started.connect(_on_resolution_started)
@@ -96,6 +99,39 @@ func cancel_planned_demolition() -> void:
 	turn_manager.cancel_demolition()
 	palette.set_status("Đã hủy lệnh phá; building vẫn ACTIVE")
 
+func plan_staffing_manager() -> void:
+	var building := _first_active_staffing_building()
+	if building == null:
+		palette.set_status("Không có Farm/Workshop ACTIVE")
+		return
+	if selected_builder_ids.is_empty():
+		palette.set_status("Hãy chọn quân trước")
+		return
+	var workers := building.worker_unit_ids.duplicate()
+	turn_manager.queue_staffing(building.id, selected_builder_ids[0], workers)
+	palette.set_status("Đã lập planned manager — End Day để chốt")
+	_refresh_staffing_status()
+
+func plan_staffing_workers() -> void:
+	var building := _first_active_staffing_building()
+	if building == null:
+		palette.set_status("Không có Farm/Workshop ACTIVE")
+		return
+	if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
+		palette.set_status("Workshop chỉ cần manager")
+		return
+	turn_manager.queue_staffing(building.id, building.manager_unit_id, selected_builder_ids)
+	palette.set_status("Đã lập planned workers — End Day để chốt")
+	_refresh_staffing_status()
+
+func cancel_planned_staffing() -> void:
+	var building := _first_active_staffing_building()
+	if building == null:
+		return
+	turn_manager.cancel_staffing(building.id)
+	palette.set_status("Đã hủy planned staffing")
+	_refresh_staffing_status()
+
 
 func undo_current() -> bool:
 	if not placement.is_active() and placement.planned_building == null:
@@ -150,6 +186,7 @@ func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	palette.set_status(
 		_building_result_status(result)
 	)
+	_refresh_staffing_status()
 	placement_mode_changed.emit(false)
 	_refresh_view()
 
@@ -192,6 +229,43 @@ func _building_name(type: GameEnums.BuildingType) -> String:
 func _refresh_view() -> void:
 	if view != null:
 		view.present_buildings(state.buildings, placement, building_system)
+	_refresh_staffing_status()
+
+func _first_active_staffing_building() -> BuildingState:
+	var ids := state.buildings.keys()
+	ids.sort()
+	for building_id in ids:
+		var candidate := state.buildings[building_id] as BuildingState
+		if (
+			candidate != null
+			and candidate.phase == GameEnums.BuildingPhase.ACTIVE
+			and candidate.type in [GameEnums.BuildingType.FARM, GameEnums.BuildingType.MATERIAL_WORKSHOP]
+		):
+			return candidate
+	return null
+
+func _refresh_staffing_status() -> void:
+	if palette == null or state == null:
+		return
+	var building := _first_active_staffing_building()
+	if building == null:
+		palette.set_staffing_status("Staffing: chưa có Farm/Workshop ACTIVE")
+		return
+	var manager_id := building.manager_unit_id
+	var worker_count := building.worker_unit_ids.size()
+	var planned := turn_manager.get_planned_staffing(building.id)
+	if planned != null:
+		manager_id = planned.manager_unit_id
+		worker_count = planned.worker_unit_ids.size()
+		palette.set_staffing_status(
+			"%s planned — Manager: %s — Workers: %d/6"
+			% [_building_name(building.type), manager_id if not manager_id.is_empty() else "none", worker_count]
+		)
+		return
+	palette.set_staffing_status(
+		"%s — Manager: %s — Workers: %d/6"
+		% [_building_name(building.type), manager_id if not manager_id.is_empty() else "none", worker_count]
+	)
 
 
 func _cell_name(cell: Vector2i) -> String:

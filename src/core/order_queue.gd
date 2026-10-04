@@ -8,6 +8,7 @@ var _building_order: PlaceBuildingOrder
 var _cancel_construction_order: CancelConstructionOrder
 var _assign_builder_orders: Dictionary = {}
 var _demolish_building_order: DemolishBuildingOrder
+var _staffing_orders: Dictionary = {}
 
 
 func plan_move(
@@ -81,6 +82,17 @@ func cancel_demolition() -> void:
 func get_demolition() -> DemolishBuildingOrder:
 	return _demolish_building_order
 
+func plan_staffing(order: SetBuildingStaffOrder) -> void:
+	_staffing_orders[order.building_id] = order
+	changed.emit()
+
+func cancel_staffing(building_id: String) -> void:
+	if _staffing_orders.erase(building_id):
+		changed.emit()
+
+func get_staffing(building_id: String) -> SetBuildingStaffOrder:
+	return _staffing_orders.get(building_id) as SetBuildingStaffOrder
+
 func plan_assign_builder(building_id: String, unit_id: String) -> AssignBuilderOrder:
 	var order := AssignBuilderOrder.new(building_id, unit_id)
 	_assign_builder_orders[building_id] = order
@@ -106,6 +118,12 @@ func snapshot() -> PendingOrderSnapshot:
 		result.cancel_construction_order = _cancel_construction_order.copy()
 	if _demolish_building_order != null:
 		result.demolish_building_order = _demolish_building_order.copy()
+	var staffing_ids := _staffing_orders.keys()
+	staffing_ids.sort()
+	for building_id in staffing_ids:
+		var order := _staffing_orders[building_id] as SetBuildingStaffOrder
+		if order != null:
+			result.staffing_orders.append(order.copy())
 	for building_id in _assign_builder_orders:
 		result.assign_builder_orders.append((_assign_builder_orders[building_id] as AssignBuilderOrder).copy())
 	return result
@@ -117,6 +135,7 @@ func clear() -> void:
 	_building_order = null
 	_cancel_construction_order = null
 	_demolish_building_order = null
+	_staffing_orders.clear()
 	_assign_builder_orders.clear()
 	if had_orders:
 		changed.emit()
@@ -128,5 +147,6 @@ func is_empty() -> bool:
 		and _building_order == null
 		and _cancel_construction_order == null
 		and _demolish_building_order == null
+		and _staffing_orders.is_empty()
 		and _assign_builder_orders.is_empty()
 	)
