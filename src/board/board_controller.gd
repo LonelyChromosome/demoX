@@ -27,6 +27,7 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView) -
 	view.cell_released.connect(_on_cell_released)
 	view.cell_context_requested.connect(_on_context_requested)
 	view.resolution_animation_finished.connect(_on_resolution_animation_finished)
+	turn_manager.order_queue.changed.connect(_refresh_view)
 	turn_manager.day_resolved.connect(_on_day_resolved)
 	turn_manager.resolution_started.connect(_on_resolution_started)
 	turn_manager.resolution_finished.connect(_on_resolution_finished)
