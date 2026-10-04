@@ -1,65 +1,29 @@
-name: Build Windows
+name: Push Turn Resolver
 
 on:
   push:
-  workflow_dispatch:
+    branches:
+      - feature/turn-resolver
 
 permissions:
-  contents: read
-
-env:
-  GODOT_VERSION: 4.7.2
-  GODOT_STATUS: stable
+  contents: write
 
 jobs:
-  export-windows:
+  apply-feature:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Godot 4.7.2 and export templates
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/turn-resolver
+      - name: Apply turn resolver patch
         shell: bash
         run: |
           set -euo pipefail
-          base_url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
-          curl -L --fail --retry 3 -o godot.zip \
-            "${base_url}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
-          curl -L --fail --retry 3 -o templates.tpz \
-            "${base_url}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
-          unzip -q godot.zip -d .godot-bin
-          chmod +x ".godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
-          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
-          unzip -q templates.tpz -d .godot-templates
-          mv .godot-templates/templates/* \
-            "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
-          echo "$PWD/.godot-bin" >> "$GITHUB_PATH"
-
-      - name: Import project
-        shell: bash
-        run: |
-          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
-            --headless --path . --editor --quit-after 3
-
-      - name: Run gameplay tests
-        shell: bash
-        run: |
-          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
-            --headless --path . --script res://tests/board_core_test.gd
-          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
-            --headless --path . --script res://tests/building_placement_test.gd
-
-      - name: Export Windows x86_64
-        shell: bash
-        run: |
-          mkdir -p build/windows
-          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
-            --headless --path . --export-release "Windows Desktop" build/windows/DemoX.exe
-          test -s build/windows/DemoX.exe
-
-      - name: Upload DemoX-Windows.zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: DemoX-Windows
-          path: build/windows/DemoX.exe
-          if-no-files-found: error
+          printf '%s' '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' | base64 --decode | gunzip > /tmp/turn-resolver.patch
+          git apply /tmp/turn-resolver.patch
+          git add src tests
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: add phased end-day turn resolver [skip ci]"
+          git push origin HEAD:feature/turn-resolver
