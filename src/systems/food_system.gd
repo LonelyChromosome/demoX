@@ -123,6 +123,7 @@ func _cleanup_deaths(
 		if unit == null:
 			continue
 		result.starved_unit_cells[unit_id] = unit.board_cell
+		result.starved_unit_names[unit_id] = unit.display_name if not unit.display_name.is_empty() else unit.id
 		if not unit.assigned_building_id.is_empty():
 			building_system.remove_builder_from_construction(
 				state, unit.assigned_building_id, unit.id
