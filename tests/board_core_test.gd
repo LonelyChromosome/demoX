@@ -23,18 +23,34 @@ func _init() -> void:
 	controller._on_cell_pressed(Vector2i(4, 7))
 	controller._on_cell_pressed(Vector2i(4, 4))
 	_check(king.board_cell == Vector2i(4, 7), "click order moved the real piece early")
-	_check(king.planned_cell == Vector2i(4, 4), "click order did not create a ghost")
+	_check(
+		turn_manager.get_planned_move_target("king") == Vector2i(4, 4),
+		"click order did not create a ghost"
+	)
 
 	controller._on_cell_pressed(Vector2i(4, 7))
 	controller._on_cell_released(Vector2i(2, 4))
 	_check(king.board_cell == Vector2i(4, 7), "drag order moved the real piece early")
-	_check(king.planned_cell == Vector2i(2, 4), "drag order did not replace the ghost")
-	_check(turn_manager.pending_moves.size() == 1, "multiple orders were kept for one unit")
+	_check(
+		turn_manager.get_planned_move_target("king") == Vector2i(2, 4),
+		"drag order did not replace the ghost"
+	)
+	_check(turn_manager.get_pending_move_count() == 1, "multiple orders were kept for one unit")
 
 	turn_manager.end_day()
 	_check(king.board_cell == Vector2i(2, 4), "End Day did not commit the final order")
-	_check(king.planned_cell == Vector2i(-1, -1), "ghost remained after End Day")
-	_check(turn_manager.pending_moves.is_empty(), "move queue remained after End Day")
+	_check(
+		turn_manager.get_planned_move_target("king") == Vector2i(-1, -1),
+		"ghost remained after End Day"
+	)
+	_check(turn_manager.get_pending_move_count() == 0, "move queue remained after End Day")
+
+	controller._on_cell_pressed(Vector2i(2, 4))
+	controller._on_cell_pressed(Vector2i(1, 4))
+	_check(turn_manager.has_pending_move("king"), "second move was not planned")
+	controller._on_cell_pressed(Vector2i(2, 4))
+	_check(not turn_manager.has_pending_move("king"), "clicking selected piece did not cancel move")
+	_check(king.board_cell == Vector2i(2, 4), "cancelling move changed authoritative state")
 
 	print("BOARD_CORE_TEST_OK")
 	quit(0)
