@@ -206,9 +206,9 @@ func _show_resource_delta(result: TurnResolutionResult) -> void:
 	var material_delta := result.materials_produced - result.materials_spent + result.refunded_materials
 	var parts: Array[String] = []
 	if food_delta != 0:
-		parts.append("Food %s%d" % ["+" if food_delta > 0 else "", food_delta])
+		parts.append("Lương thực %s%d" % ["+" if food_delta > 0 else "", food_delta])
 	if material_delta != 0:
-		parts.append("Materials %s%d" % ["+" if material_delta > 0 else "", material_delta])
+		parts.append("Vật tư %s%d" % ["+" if material_delta > 0 else "", material_delta])
 	resource_delta_label.text = "   " + " · ".join(parts) if not parts.is_empty() else ""
 	resource_delta_label.modulate.a = 1.0
 	if not parts.is_empty():
@@ -221,5 +221,5 @@ func _on_placement_mode_changed(active: bool) -> void:
 
 func _refresh_header() -> void:
 	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
-	resource_label.text = "   Food %d   ·   Materials %d" % [game_state.food, game_state.materials]
+	resource_label.text = "   Lương thực %d   ·   Vật tư %d" % [game_state.food, game_state.materials]
 	board.set_day(game_state.day, game_state.day > 1)
