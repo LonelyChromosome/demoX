@@ -1,52 +1,65 @@
-name: Push Turn Resolver
+name: Build Windows
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - feature/turn-resolver
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_STATUS: stable
 
 jobs:
-  apply-feature:
+  export-windows:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: feature/turn-resolver
-      - name: Apply turn resolver patch
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.7.2 and export templates
         shell: bash
         run: |
           set -euo pipefail
-          : > /tmp/turn-resolver.patch.b64
-          printf '%s' 'H4sIAAAAAAACA+U9TW8jyXXn0a+oJWCABCkOP8QPMdYisztaY+D52EjagdeDRaPJboodUWxud1MzymLPOeSQ+JhDACM+B0iQXOI5+DBG/sf8k9R79V1d1Wxqx3GQeOER2VX9qup9v1evilGyXJLj4+ukIOHjPFs8nqdhFrF/g0W6KbJ0vY6z7nVE5tXtR8kmit+RyegkXI6n3e5iMTwdRxHp93rjk5Oj4+PjfSMctdvtvaP85V+S42lnTNrTzpTQL3dhRu6S+O2MfAG9X9OPR/gwj9fxooijYLdJiiCJyOyMNBqsLcrC62t3U7LZ7oog3oTzdYwNRbaLj9rQlMV5ur5LNtfweBmuc/58vkvWEX0c5Pd5Ed9C6xf80SU+6W7it83WEYH/lrvNgs6t2G2b1+FtHORFWMQz8gv6+RI+dshtuAmv42xGrnbZ5gX70iEMF9ZKW+T4c3KXJtEM8dJHxAx6DDOfeqQj8ggedhfxeh1sKTLyOOpS4mwomptBugn0' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'hpbRO6O0CJ3dRQv0L+gsAj6nbhTeBwzh1mt6Q+uobb6FDbsiof3ocrPCerfcXAVhmWySfOUHIdph7vT5kjatEG+c1kCS4aTT75H2Sb/TH0iiUL5bhZuIMliA7NaM7+JNMSPP4Ms5fNYIq7jGxnETvszIazq1NBsk2jvHj5Il2aSFyc0zulb+PFiEmyBcLOJtwafQoiM9epTFgAygHeVrkA5g5mC7Du/jjElLWOCwsGYKC7t8dkY2OzoTCl4861KhOjsryyBdNTHQvQrzYBtvUHxu07u4yd9uITSTNHTOdGizG0y6NMqZmAO02rJuNNpkA5KN+p0JaY8m9F9JsNqYd1BLsPifgFzltYEa08hI37f6dJM8iG+3xT2AgOWOR8Ca7Qnl0HF5wfsnL9dLuWSjiEOHmpHLIqOE7RAqa9dx4X7dYDXUUV34lnfpGwJSi4Q5+YZ+RsXF8IWvnDHWI2mGeELKAq7mMc4karZEEyojuvZkkydR3GQzanEcN4HZdIDw' >> /tmp/turn-resolver.patch.b64
-          printf '%s' '3Q9Ta3WD1TrYHBzEEV1SmkVxliMkU/AYzRgYmAyOzu0gUAD6VgoFYIsiCFfTBZJsYvYqZQ6B/uZxv0OtRcslAfpcgD0mU+CL9pT+UVblwbRmNmG5DumAyeYuXCdschJx+vDHzkWwnra5+H4X72JjRmImPu3MV0JpR5vigHW22JyayBQMfmCtEtc0T9M15x/LAwCGQOlJF4vdNqFzn98Hok8zZ8YXtShqObZg4VGgPIg1s1nl6Ifoy6UPA9EHFi06IgGXlPUoW0RJRAeiOsWQKorzXZxz/cHVS1PrrckZyo5s4irdQghAeQQeWrLZgWACSPWKYlx4F8aIE3Ssh7CjOyDYqEI1YU+2ZYCCHM0kEzEV3TuGKP3e8xU9/unmv+020RpsNhlGTXKTY3sKKa24TF0K7HHpNipUnU2MK/O4+YWbWlZQD4rizkYmBqWtK7SQI6vNuKltSBRvVModUc9GCyo6ckC1kj9LeRtnW5ItcGUUW047QxODPulO4pN+Dajs' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'lC4LJepHXR9RVcKD5WLc8xVGDgCwBIaFTukvI72Id07dWXcCiUCw21oCvcBOdVcjRHbnBH+ia0TFIH0PMAwlNHfhv8YysoOia4SOZXM8YBfYRAVRpW8QYd9VEM6/XedXDCuAC3iNreL5IUqXPomPNytCxYaXcgOF/jUO6ZQ4ba9iaqibGQQZ3zNW3hkPRj2w17Y63Ynk154cnpaHVmLd90xtWgFEaKxyRgjFPR3qS7PC/LFN8+eP3328hfBl6+ev7q4BH31A7CcEVijgpi53Aqh5/IZeZog94TZPcXPDz+yiFlna0efvfG7sKW+dyn8RXyLMZWIxL8Wj5g6RUd/RBV9ezTu9PtKcWRxGN2bSoD5FllMWUk4D8fYWUg1tw9BacnUyvMmezWGJ8FZyYBJuegngFU99qC6bawUR6INxsh0JgYQrd14Tt93RGK+meq9/e6pzgjAALXNJdB3QAkMtmEwOjWib6AjW1ozzZLrZCMdPqqBk3U8I8t1Gham46qcH' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'NCNCIJ6dotY+Rwdp8vSIWwMBrrDVEQLvYGSn2Z7aMe1PDQMHGUE4nau0ADDeIIwdDSTM9BUhfqEDHS7sczf0UdSzjOlqDHEGw7jO9vBs6M4tRhrCbavuZcM+vs2IcA+oIH2QNn/rhZFaCC8yl7ECFI5VeVX93TmJuG0NwhPF/1u92SxPB31/SZhH7iSldj3AsjXKdiNU2Y2vGnYbbiOC8g7SkXMHliKWk+amqpaJE8PybT60rV2BpapCTQA7QF1/0+svOnBKU++2q6aKFdT8i32QEaD+kvcJc5ianBy/R3WAB76/7UUqUC2gZNmcb/lierzze427woaX9Hnhu/FtWO1D6nF2HbWgGNcDozUENzXZdPC2ehkAo87pFYUPHLaxNvRk+qhJ3Vi5N8ftDSFGzbF5v/gssWIOmdiKKAvmqdKx5AVao8HenLIGzKXU6MraheyWplRNT1qHdhEmiJ7pwSdGxBPZ5VbYpE4c/FBO9j5G0xMUd2j1J+RteFJGvV+I' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'F6QuXE1hd0WIeFSm8yYsBfZKPIbdTzzdGMzGgy7y5ulPhUZrcN3Cf4/IZcvWe+Fk9+PdNx57KFHOaV8f/qQ3QEn3Y7rpyx+Sii8N+b9CSHvA/THsQvljS+o77ulEUxB/vibD7+j//zXv358/zuqBlcf3/+mIHcffpuS+Yffbsji4/t/agCzOKCA5jsQEvdJOcklyy7S29uEQo+gPaYrJY0//gOFdvPx93+gCnj14fcLsrn+8Nv7vyA3qw//QTGy+PDvZK4NbYwKwxgMTD3jKA4Wq3BzTY1oTMdqigDBwSrodI06Q0hS9jqnetDqSWAJnYDsuaFWx8WbLGScqexa42f5z6IG+Rl5w5q6i1XWHI9IGyW0+67VIVNyzL7cf6dzliGq1jAq9NRSRDWUA6BeUxC1s2QykEKkl7zyRZrFj9FYBhjgKxfc0XJE/UqypL4/AYIJN5s54T32v2532Z+OonCK3vfjKL57zHaSpGvtggsk7XUggdmZgAk9ai/WYZ4jr' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'cgr6PtX0PWoHb8r4k2Uk4t4+WW62yBLHrXz5HoTrglnIHgCupMhgjkCngyMNP6s24yg0y28ERxYo6va7qG4LKUarCA6Ke8BdYjQZTzh8ILCgjASB5pxlY8zAY1vtKJLLzOkMg7DERAu0FdfsYwz6XJTtpBHhoS1FPul1kIdu2muTA2oCn3IbpyFudp/Q9fLHlKOARzrHaCEGD5RYzQ7IDde0kYy5aEsg4B0bYcJeMNOEhisJOJ9SSg32sszQt3K3tKLBR7xwUsU6/JNPrl83tFe2wIkga2M8pYPXXnyN7FBAWRn6f16BcCguCUwFbxlM5Nys20OskDqqCkPJ7alK/nKHKu8JB1F5ggaoHwTbvNVyhH7NdvYwdcvecus5KS5eolgXG57URLnNtt0b+J7pqNFj26eZkxILV4UHT49H3Kzr08r3MKOFmMOGt1u72HbZS/ZbP9BEM96hwNUxGDv6bwDHpPJMbDiVRjxCcKysTREn7TafwRv3TNRS112+VBOH' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'uf96arVyNXaTZtCeUPIN1nYCCoNzkevY7i7u6TCeENrLQM+HM/jk8noEAOOsJURRwtOH80eP07j++VoeFLcFfPcswixZ8pACrGzHBFvp1pLCk9Pev1Br3pJ/iE092Rkeycukff5KcC7hlPyJMvC+zeGeIL2f/OdVVLp904ORKnNIpUda6G2F437y/Higaj1M858MkwWvf4yWk3nW88yTRfYWJjVJDLF4Wk0HtBZn0z708F4Ws4UO1+2VmM3Y4VjZzIg7SGNizEgEfR/SREH8Qf3UCGyFXGqjGuNVhn3qmbh3pZjXVfTdkV9MDkIfvPDqRf0yi1Pq3T26BiT1zptJU8rF4sztNHXsw1n9BHMr3LmfLdF2jymfsAEqBChnPpmtlEu7I770q3DqpaxM9XVNdLpzjJjI/2BjXTJqqdKZ4pJdw1CYi0VSy5DTsRMXRg9RcbTCcWTnzYBaNkYtueLyBYOoqKZkUMzucDwG1pHx/CfBvDgkjkF39xDU4Vw7YeBL' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'wUanApVeWThDhxesdm2KzYdUPWQjNvXUplhxy6IVJEgmwjGg3b2fF88ZyHZiubY5N140SfrrMRUU2EUqrUR0CGgbQNHDsVQCDOeapWSzIsk5HeWxOFFR7JmgsdDpE36LW3pop2cmaOgGtCGoBg3pwhAOO1sWIezlXTpyxYfJxJsqIEJtOk0W6UJGbzQflRiKDPys7MB3SINZAKv6WAmVzznRKNynmszj74lo8bF7Kl4tUL3CE/e5ufy84fOUoQK0t2n8CBPzablsqFctXDFrzb6dYvi4AXD4MhiLsfepczooJ3m/hUwkD5vFdGWAldpL/gHsRchXunYhtJmKRU+WXMWxWDGNi1OV24ssIcBZ1SVf0Ymp0/J58TRF9GlOVQGUPFqy0SX3KjV+lbGnzYvOKI5RlO9HJVXb0gsaACdBz18JdUOU2BnzVoqnDUyII5csHMooVZLycfKQUu6ghXq21kFglsF5crZfTN1ZukcyLBKvi24Gpb9GbISON5T84EM2' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'da2DA1ZxiolvvNXXpupKy3rtQfxmi6s1NAe7CNvQJkV38RhuhC1oHiijVChS8vya7gaCiXwhPxceb7dF09+FTx98u0l4kh1aZ+RvvGEOqVxsKTzDW426dt1HF3HUn8cO0RdN28l4aoQWBBPHcsqA6PvQ5ro0mlvF5AZMQ2WRj/gKE/ZMzy2yrwslw/qypw+ce0Kdp995JtYZRdD3yVjXMuiarlMl3PFexoFdbZvhmBox7crSDbYsChZVUUas8ZsXOQgyMKpEjovaE572dVBardHQ+lSdhfKQn/8yJr2G/utLotXSs5hhTvi2qf2xvelrWlHfyY4+KhVlVPR3ucG1ZFdcXWqlTJa9JbD6GTPDqF/CC0bN+jZ6TiX81WVjtM9CmDNPnssXQ/1iCGyyKhDLpIcFO16uk5ukzOjAzl63pFJjTO1J1+yjlNn8V+zyt49eRVl9dgbzRuKbX1XEhSdHgezQg7nfp41pojif2gAzMaMwJ8OaSTwWQCm3xlE+ox9+' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'FE3xW9DcIQY2D1TM3Q1KFn2Hl0tqFkbH7JUgffpAnCQTPwLbphqYme25Hh8s0MdoWmbZ5QOFAw7p1rZsZ6AnJxMTpeTBwpIRU51sH07zvJ1dD9/N9y7zDt3UlVrq7WYaLAYjMLai7lTOVUu5P3RqVfK72A/q7IowKkvv2YakPaKN7tb9pX8QPng9ZPnz54+uToPXl08Pb+47NBHX7568eLZVfDi1evzF+cvr7RH8njI18+ffCkbL84vXz1/fR5cfnt5df7iUn90/pr2wSdfPXtJR/r1OThG8P3y6snFVfDy/FdX/MmPhmCzmIz2K99eICK0mXMnohS3zaz0Jq9E8MWsZpTo6iW3Nx0hGjlTLiGeB9pxe9REjHdtbBMVkWElNR6MZact9Ao47pRZIaq+b1lathu0NLgGdOkHaCU3chBzS6ajz9E7KFbetF0IsHlLm6XpgPJpGKPJvhWQHSzqGMM+lGtiZ89INr/r8DkzcHzIZeg9PNC4qLiA4TURZVgua' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'IaYabBqxRztOiFNuxTSSEmQPoQhBa5pWtKvLxoVVyBAlRHoy1zYwuLSHSKF49mIhPY92qMjVzvzeF6oXVzQhXbZZvE6uU0wzK/aD0WPgAW4CY+ApRNgbJUbtQzcJ2oAEhrUVYH/v2JAcnKb5DldCtZParFWuzqCY8G39ySQK8PvmY0BiU4M4NDolKzTzTWdYfwuyYvcMTueTHZcyXDwaBQL63RxE0fuYeyY8zNRmcSL3Q4djr0mCvX8S3PcJMDOQgU4maaedjpo0Vc8U5WTdFcAQHbPj3smxsUFabHil78IIdQnYY300Dnx8dzTecj1Cp8AUQzxJJTjk5D6+Y4papJs7f+1uaxHcU57h+iuYqLNLLiT0q3rBMzylt57oy8MVATkwMrdNIEVdOq1eFpC9wQO0Dz23OBumX3T+5z0D8H9C9on2VKvmh1E5dlVyn8kB+cXiM7QDxk+BhhXYWNdGAdsdNoG3dXxmgdX3UkHsSedkT+1AXGX8Dk1f3kzjWeI+' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'Rx1osLcgab6SvCKBn6ZBscnNHTVnTaSa5Dih53tEHVvco+OD9VSe4QKtDiX0S4xjhhQMo+xM6lBEKc2yjtLS2eerQStdfjwDUEoAlddrfEouWHM/BvexvGMCuVrREAPuKym5t0w9gld/dAxphiMa2E+s6+FsbqUL3DZm4nQr5rQwwFnJFjpy5EaUibSQD5P68/oFUVJDsJILU9E5jGdYMyzbQ47VE6UW9XUYuByvs6sd1XbXSUyVCpO4lebh5ChQr3JEEalm0uCqJWRm1v57Ufe8z2OU1J2COe4QLH+LSHbMM9dwHlI90lhW5HTp523DOD0hFI1de0EPVBAyykL1uPJeTrmgxP3LIXmT0uq9loJvMk0nkzD6LAEnj8JORyNlye9QVRM173yUqL0Nkw2rLw4f4xyiWLIOFmmI/d1q7WweW8wnsb+quC9g+g7EUM7R2kV3fu3IMybXXh5I8ZJrltl2sql8beLrT+1g6F4NwErKnw7+2IZ8MeWWXrrvdUGO' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'rDRK7uogQ22VxeiWKPjfHDNZ0SOL4eSZX7isb6+M8LzKqJmAw8VVJ0iOuBglTZQ63Bm1USwTtd6x+tOB/HkNH4w0/oFM7k7eXu/28yz77e7fWtFx9Y+zuGRTk/fejsh0/F80h/UXK1vJF1OJ6UCfseRP7+w2lWGDetxVUEjZVV3Q/erJxcvxB4iDw0+jXCXpovy++A5wtsPEHt9Fkr0tad6n4LNAv7AaBIfzGXeI/xWTYyr2oYrgT3VncZ0jDJPl6apPGLmqeGsNdxhGsjD/141VNG/lnTG4+VyEk1/mnT6FVK0fDf+PkrTu5vp7dC7dtRuzBu2FZDRJI6ATPrxZNSnqmU0jYfzXvkIiPPl0qLMZnYf+wTuYx+Li4CWIe4+65L2FXtkCBl/1v36+ZNvzy/YSYt0HQVZuLkJihA3p4774gyGFte4FMSxfRGV+2Y6Bmud3ofrAiW2x55k8Zy+A3msNXXJ1/rUL0TTc2gxVmA2dV++enlephaPHx7buRJJM' >> /tmp/turn-resolver.patch.b64
-          printf '%s' '38HTrnhoj8eR5Ry/cnkdDgZlSlXAULRr6ITu0qT3aQ50C9LW6ZpwXSKrySdBd3i0XfaNQLQOdfKjXzJITOn4RnGqIn0gXPGpA6ISrkgM+NEzSxZaUx2Fx32xHqVMl7k1bvAfAlfvn6JW2An89UVwOL+b3cH7f7aHxq47MaM5Un0GpTG6w//ubkmw3dDcoe3ThTkZvXx/d8n2jUXP+LNqihojtw522xWwTEswD490BJ3Zk1JG+5eVVcnfjLyfsIbjOvfTywIVnFBsaJpez+c2lT71Y4S7Y+/+fj+Hwty9/H935Ei+/Av5Pvdh3+WNGOJKXsuDhbmE/PP+lNMiEQf3/8buUk+/v4PG85QJaiQSzF5UwKiLPm7LVl/fP+3+DLemzXojEj7ZKJfaWJxofPGTwfniJwq52692NElXBYX8iypOMi8Z5OpIhfrPPy8R7BYuafladWetKF1u+/I59S0sTQs3tJifX9Hfk6+ePXk4mlw+ezX53o//blpy4o4L3L5m' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'yxUjOEBs2K+JvGbMPFg3JsMut3Tk8V8PI9N++V9mVkubzPqoSFeQEb/DLXLnzEWMM4dapcXlm5rkk7CSYdM4G7l2r1PsHewWMWLGyjxu7Yy3SZkKg+LdbK44blN3LjGvS0qJWuCl0eSOMzW9w1Wo66g2tekm3Ow4FKVxE5cUbCQrCfXqzRn2WIOs3QXt+/cBFQ/XjdajiHxhqUao7L7jj4JAeQvUcjugwdQAK6D/oQEGHACaGAFJrIY7SAOIEggoRroN4vReQE5HYX6rI1bsSPKb314SwNIchNvC4J7FRu2VfrJqDtQ1K21JFbg5VyV9yjKoSsj9vWF8lxKPdILGp1TJfeUOniSVTH3j4tZJlAwiROpT3sR/ZMG4oJiB8IjuOh8WVCk8eFqUl0dxQDUwO4sO+LtBfpp6K1lMB5VL+OBlO7VXQ5mPGroCC70NXv3RW/XvEtH0jiG6JTzmIKP2Db52zAXFx8CThutg6fKBy/d2VkxAdStsJMsb79m+kkyL' >> /tmp/turn-resolver.patch.b64
-          printf '%s' '54XxQnqzFBHDtirawCO6+M1SSTcFas0S6hXktzxsyhc+lig02COwZevLs6Dq/PLq+DVL6H90fc7am17LaezUL5GuOQ0eLsI52EyGJ4Mo243jhbTeeh2HvxADCfC3w3d0BPIY+C/flfCtE7aXYecAlqjuhLRPg4nNjYlNcg6XkoOU/VG83gF5w/2qZA9YFH0XFArxLl8fu9A2Bai7HtwK1KttT2wYYcMWy1xlT/8ZteoknROqOIKWhsq0aXWSVR8M+D3jDbgyzrcbhEJAht0yvjzIbdhdkOxxKKjQ9d3MO2dUwEtxoj1cMLvB6xri1IBdl2tYeyolhSGs7XmXUjDXtgfO5O2VbCNExns3JXYJrlcxJv4Kovj0laEeXkcgBK2EcsouCsV8HP/NAAL0PwG2m1c+JJVqqC/wGFoncVPakErZbHlGmJj7Uyo7AgF4NssvQaWg6QnvhBusQen39U3Fy8DXpR+oZGuLUmnLfng9dkXm4FAUKRiAorSMuDf1cl+K' >> /tmp/turn-resolver.patch.b64
-          printf '%s' '+CGTRHWpSuukcE7phy/aKl15c288404ABFGkVHfysxwh9iBCTgpjh8cc3UftWpaZRGY7DPFovjH4QE+MIwbyWGZ46cXhddZ5cBaZW3HH4bk/IFX/6PTb4UDxiyUw1/X0cG1Ma8eh9MKVaU/J2t/GpaP5nLPhAQJb19c7MWJk++yuwTCSZ08wGPxuy07vIcVLJhgfQPOtnErk/tMkKeb41RWRTf3SS3XC47TW1Xd1IkuVy/7lJerT+nk16PvxMkILADapxJYr6rCIzh0rIPqVjCUDk2vTgLOsoiIiU1+wRY+4WGyVtxfU4T6QoRcv4rGxfanywF3+GMtnjF431LjdSzOn1l9l9Bbx6/U8M49K4lFuyDYiMZLXnl1wFRJLs9tAVwzypHk/eFuXcX2WLNb1/0DYnfkTQ8vQLVukBPzgLcZl8PYZaQxCf3i+TfnX188g6NzsvLZTp/QMeR0nZy/jzR0gMtXLzXijDtk7BIK4z6QB+NYCYPhwVoCceAanr386' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'tnFiycX31bJdj1QXzy5uHjy5S8vTYT0Ww9e9ADVFcqttmausWT569ssBc4GSy1ZbB5mVAPe5MGSPtZP6fv258pc6KwkN3jSKhVnNTDeUhyBHbaZZU3wTIOjVc+cWZhUSDPfhwBns77HhOA6zAstjEvzBKzKY5xdvkp360irwrb05z4n/H+D65ul6Y3b9YUW3UT1uOvLPOZNcr0qPD4ztlnWrcprtkcainSZ03KWoMvuHIeI50Ad2a4QFhjZZzR7YqtGUY5hiznoLp+Rzc0HsO8AyPHoB2mtp2vfT2GKN4fDXpE2Q7zTqE8CmbHU99vZbYisr8A3jxXqodvs3DUuxpDnUxl4WAzrzU5NmPsPyzBZkzxcxmuRMmbFPHCM082U/IintsSR4GfW1GV/YHMXf/ky24k6JX4qxYU2J9SRZEYOshZu+Cw8vDPivMOXiCjBbatGCUQ1dsVRVwsWQ28thjnYjCsfq0wVqBLB3R1Xf6OqtBYSjYOz3iMeuhPDdXRYq' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'FM1YnvIKY82dL88go/BoZsehgPDqLmyNM/3xjqsl8sS6K8b9oC1+KyC8ZppG4BnMlOctOG5usl00k2ETBljGiJTekeS2/XOQ915tW7FNyZ8l3qCqfkkEEHTNTOCimOTCPOYlzQaindt7bWzPXE1oz18qRuJt0mxklsCZVNheR3ejN6f290wHFSsXGZCAldAS82Oh30IRSZIYL9eFMVhDRxbu8lmkbHcUvyOUok6dSn1+hvGBRh0ssP+AeMMYSAYZNiX48xjSpIYhx4ODpq1gjYgYXQHQUlEipSBGpr0Najk/hUXloWanWk3deg/vsFnJW6y4eRSF9ikadEFYV+sKB+KRJ6+HHa/N46iHa/+ocGC3hmRqoH1p0/4J/02H8sQGOVT5d8vLhc6ybK+mXUHtWzQj7SInxQxD0TySnrNv9Gv1IaPannsm3YCUrhmUcLKm6HyqkNuqcTRpfp+J0j1N04xbnf5KoizLM2aHIBMrffr74rwAvc9Per9nMHJcDqaD' >> /tmp/turn-resolver.patch.b64
-          printf '%s' 'g/dHfEXsS96N/f3ab6KFuv57dF/A8jf4GNpjAAA=' >> /tmp/turn-resolver.patch.b64
-          base64 --decode /tmp/turn-resolver.patch.b64 | gunzip > /tmp/turn-resolver.patch
-          git apply /tmp/turn-resolver.patch
-          git add src tests
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "feat: add phased end-day turn resolver [skip ci]"
-          git push origin HEAD:feature/turn-resolver
+          base_url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
+          curl -L --fail --retry 3 -o godot.zip \
+            "${base_url}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip"
+          curl -L --fail --retry 3 -o templates.tpz \
+            "${base_url}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
+          unzip -q godot.zip -d .godot-bin
+          chmod +x ".godot-bin/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
+          unzip -q templates.tpz -d .godot-templates
+          mv .godot-templates/templates/* \
+            "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/"
+          echo "$PWD/.godot-bin" >> "$GITHUB_PATH"
+
+      - name: Import project
+        shell: bash
+        run: |
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --editor --quit-after 3
+
+      - name: Run gameplay tests
+        shell: bash
+        run: |
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/board_core_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/building_placement_test.gd
+
+      - name: Export Windows x86_64
+        shell: bash
+        run: |
+          mkdir -p build/windows
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --export-release "Windows Desktop" build/windows/DemoX.exe
+          test -s build/windows/DemoX.exe
+
+      - name: Upload DemoX-Windows.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: DemoX-Windows
+          path: build/windows/DemoX.exe
+          if-no-files-found: error
