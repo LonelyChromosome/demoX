@@ -2,11 +2,11 @@ class_name ContextualBoardController
 extends Node
 
 const BUILD_ACTIONS := {
-	"build_farm": "Farm",
-	"build_workshop": "Material Workshop",
-	"build_prison": "Prison",
-	"build_infirmary": "Infirmary / Y",
-	"build_barracks": "Barracks",
+	"build_farm": "Nông trại",
+	"build_workshop": "Xưởng vật tư",
+	"build_prison": "Nhà giam",
+	"build_infirmary": "Y xá",
+	"build_barracks": "Doanh trại",
 }
 const BUILD_TYPES := {
 	"build_farm": GameEnums.BuildingType.FARM,
@@ -64,7 +64,13 @@ func open_for_cell(cell: Vector2i) -> void:
 	var building := _building_at(cell)
 	if building == null:
 		board.present_context_target("", Vector2i(-1, -1), cell)
-		popup.open_at(board.cell_screen_position(cell), _cell_name(cell), "Ô trống: chọn công trình 3×3.", BUILD_ACTIONS)
+		popup.open_at(
+			board.cell_screen_position(cell),
+			_cell_name(cell),
+			"",
+			{"open_build_menu": "Xây dựng"},
+			false
+		)
 		return
 	current_building_id = building.id
 	if cell == building.core_cell:
@@ -88,7 +94,7 @@ func open_for_cell(cell: Vector2i) -> void:
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT and on_core:
 		actions["cancel_blueprint"] = "Hủy blueprint"
 	elif building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		actions["builder_slot"] = "Đặt ô Builder"
+		actions["builder_slot"] = "Đặt ô thợ xây"
 		actions["clear_slot"] = "Xóa job slot"
 	elif building.phase == GameEnums.BuildingPhase.BUILDING and on_core:
 		actions["cancel_construction"] = "Hủy xây"
@@ -103,10 +109,10 @@ func open_for_cell(cell: Vector2i) -> void:
 			actions["demolish"] = "Phá công trình"
 	elif building.phase == GameEnums.BuildingPhase.ACTIVE:
 		if building.type == GameEnums.BuildingType.FARM:
-			actions["manager_slot"] = "Đặt ô Manager"
-			actions["farm_worker_slot"] = "Đặt ô Farm worker"
+			actions["manager_slot"] = "Đặt ô quản lý"
+			actions["farm_worker_slot"] = "Đặt ô lao động"
 		elif building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
-			actions["workshop_manager_slot"] = "Đặt ô Workshop manager"
+			actions["workshop_manager_slot"] = "Đặt ô quản lý xưởng"
 		actions["clear_slot"] = "Xóa job slot"
 	popup.open_at(board.cell_screen_position(cell), _type_name(building.type), detail, actions)
 
@@ -145,6 +151,14 @@ func refresh() -> void:
 
 
 func _on_action_selected(action: String) -> void:
+	if action == "open_build_menu":
+		popup.open_at(
+			board.cell_screen_position(current_cell),
+			"Xây dựng tại %s" % _cell_name(current_cell),
+			"Chọn công trình",
+			BUILD_ACTIONS
+		)
+		return
 	if BUILD_TYPES.has(action):
 		placement.select(BUILD_TYPES[action])
 		_update_build_preview(current_cell)
@@ -275,11 +289,11 @@ func _cell_name(cell: Vector2i) -> String:
 
 
 func _type_name(type: int) -> String:
-	return ["Farm", "Material Workshop", "Prison", "Infirmary / Y", "Barracks"][type]
+	return ["Nông trại", "Xưởng vật tư", "Nhà giam", "Y xá", "Doanh trại"][type]
 
 
 func _phase_name(phase: int) -> String:
-	return ["BLUEPRINT", "BUILDING", "ACTIVE", "DEMOLISHING"][phase]
+	return ["Dự kiến", "Đang xây", "Hoạt động", "Đang phá"][phase]
 
 
 func _on_resolution_started() -> void:
@@ -293,12 +307,12 @@ func _on_resolution_animation_finished() -> void:
 
 func _planned_label(building: BuildingState) -> String:
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		return " · PLANNED"
+		return " · DỰ KIẾN"
 	var demolition := turn_manager.get_planned_demolition()
 	if demolition != null and demolition.building_id == building.id:
-		return " · PLANNED DEMOLITION"
+		return " · ĐÃ RA LỆNH PHÁ"
 	if turn_manager.get_planned_staffing(building.id) != null:
-		return " · PLANNED STAFFING"
+		return " · ĐÃ XẾP VIỆC"
 	return ""
 
 
