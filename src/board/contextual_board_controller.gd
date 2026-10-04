@@ -159,7 +159,7 @@ func _on_action_confirmed(action: String) -> void:
 	elif action == "cancel_blueprint":
 		turn_manager.cancel_building(current_building_id)
 	elif action == "cancel_move":
-		turn_manager.cancel_move(current_unit_id)
+		turn_manager.cancel_unit_plan(current_unit_id)
 	elif action == "cancel_construction":
 		var building := state.buildings.get(current_building_id) as BuildingState
 		if building != null:
