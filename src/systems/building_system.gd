@@ -12,10 +12,12 @@ func footprint(core_cell: Vector2i) -> Array[Vector2i]:
 	return cells
 
 
-func validate_placement(state: GameState, core_cell: Vector2i) -> Dictionary:
+func validate_placement(
+	state: GameState, core_cell: Vector2i, planned_unit_cells: Array = []
+) -> Dictionary:
 	var cells := footprint(core_cell)
 	for cell in cells:
-		if not _is_inside_board(cell):
+		if not is_inside_board(cell):
 			return {"valid": false, "reason": "Vùng 3x3 vượt khỏi bàn cờ"}
 
 	var occupied_by_buildings := _building_cells(state.buildings)
@@ -26,8 +28,11 @@ func validate_placement(state: GameState, core_cell: Vector2i) -> Dictionary:
 	for candidate in state.units.values():
 		if not (candidate is UnitState):
 			continue
-		if candidate.board_cell in cells or candidate.planned_cell in cells:
+		if candidate.board_cell in cells:
 			return {"valid": false, "reason": "Xung đột vị trí quân cờ"}
+	for planned_cell in planned_unit_cells:
+		if planned_cell in cells:
+			return {"valid": false, "reason": "Xung đột vị trí quân cờ dự kiến"}
 
 	return {"valid": true, "reason": "Vị trí hợp lệ"}
 
@@ -42,5 +47,9 @@ func _building_cells(buildings: Dictionary) -> Dictionary:
 	return occupied
 
 
-func _is_inside_board(cell: Vector2i) -> bool:
+func is_cell_occupied_by_building(state: GameState, cell: Vector2i) -> bool:
+	return _building_cells(state.buildings).has(cell)
+
+
+func is_inside_board(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < BOARD_SIZE and cell.y < BOARD_SIZE
