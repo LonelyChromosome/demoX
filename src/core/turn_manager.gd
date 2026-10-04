@@ -134,11 +134,12 @@ func get_job_slot_at(cell: Vector2i) -> Dictionary:
 			if planned_slots[cell] == GameEnums.JobRole.NONE:
 				return {}
 			return {"building_id": planned_building.id, "role": planned_slots[cell]}
-	for candidate in state.buildings.values():
-		if not (candidate is BuildingState):
+	for candidate_value in state.buildings.values():
+		if not (candidate_value is BuildingState):
 			continue
-		var slots := candidate.job_slots.duplicate(true)
-		var pending_slots := order_queue.planned_job_slots(candidate.id)
+		var candidate := candidate_value as BuildingState
+		var slots: Dictionary = candidate.job_slots.duplicate(true)
+		var pending_slots: Dictionary = order_queue.planned_job_slots(candidate.id)
 		for pending_cell in pending_slots:
 			if pending_slots[pending_cell] == GameEnums.JobRole.NONE:
 				slots.erase(pending_cell)
@@ -255,8 +256,8 @@ func _planned_or_current_staffing(building: BuildingState) -> Dictionary:
 			"workers": planned.worker_unit_ids.duplicate(),
 			"slots": planned.job_slots.duplicate(true),
 		}
-	var slots := building.job_slots.duplicate(true)
-	var pending_slots := order_queue.planned_job_slots(building.id)
+	var slots: Dictionary = building.job_slots.duplicate(true)
+	var pending_slots: Dictionary = order_queue.planned_job_slots(building.id)
 	for cell in pending_slots:
 		if pending_slots[cell] == GameEnums.JobRole.NONE:
 			slots.erase(cell)
