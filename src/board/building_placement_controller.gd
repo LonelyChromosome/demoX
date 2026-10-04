@@ -9,6 +9,7 @@ var view: BoardView
 var palette: BuildingPalette
 var placement := BuildingPlacementState.new()
 var building_system := BuildingSystem.new()
+var resolving := false
 
 
 func setup(
@@ -26,11 +27,14 @@ func setup(
 	view.cell_pressed.connect(_on_cell_pressed)
 	palette.building_selected.connect(select_building)
 	palette.cancel_requested.connect(cancel)
-	turn_manager.day_resolved.connect(_on_day_resolved)
+	turn_manager.resolution_started.connect(_on_resolution_started)
+	turn_manager.resolution_finished.connect(_on_resolution_finished)
 	_refresh_view()
 
 
 func select_building(type: GameEnums.BuildingType) -> void:
+	if not turn_manager.can_edit_orders():
+		return
 	turn_manager.cancel_building()
 	placement.select(type)
 	palette.set_active_type(type)
@@ -40,6 +44,8 @@ func select_building(type: GameEnums.BuildingType) -> void:
 
 
 func cancel() -> void:
+	if not turn_manager.can_edit_orders():
+		return
 	turn_manager.cancel_building()
 	placement.cancel()
 	palette.clear_active_type()
@@ -56,18 +62,18 @@ func undo_current() -> bool:
 
 
 func _on_cell_hovered(cell: Vector2i) -> void:
-	if not placement.is_active():
+	if resolving or not placement.is_active():
 		return
-	var result := building_system.validate_placement(state, cell)
+	var result := _validate(cell)
 	placement.update_hover(cell, result.valid, result.reason)
 	palette.set_status(result.reason)
 	_refresh_view()
 
 
 func _on_cell_pressed(cell: Vector2i) -> void:
-	if not placement.is_active():
+	if resolving or not placement.is_active():
 		return
-	var result := building_system.validate_placement(state, cell)
+	var result := _validate(cell)
 	placement.update_hover(cell, result.valid, result.reason)
 	if not result.valid:
 		palette.set_status(result.reason)
@@ -80,10 +86,19 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 	_refresh_view()
 
 
-func _on_day_resolved(_day: int) -> void:
+func _on_resolution_started() -> void:
+	resolving = true
+
+
+func _on_resolution_finished(result: TurnResolutionResult) -> void:
+	resolving = false
 	placement.cancel()
 	palette.clear_active_type()
-	palette.set_status("Blueprint đã được chốt vào bàn cờ")
+	palette.set_status(
+		"Blueprint đã được chốt vào bàn cờ"
+		if result.building_committed
+		else "Đã kết thúc ngày; không có blueprint được chốt"
+	)
 	placement_mode_changed.emit(false)
 	_refresh_view()
 
@@ -95,3 +110,9 @@ func _refresh_view() -> void:
 
 func _cell_name(cell: Vector2i) -> String:
 	return "%s%d" % [String.chr(65 + cell.x), 8 - cell.y]
+
+
+func _validate(cell: Vector2i) -> Dictionary:
+	return building_system.validate_placement(
+		state, cell, turn_manager.get_planned_move_targets().values()
+	)
