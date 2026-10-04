@@ -51,7 +51,6 @@ func validate_builders(state: GameState, builder_ids: Array[String]) -> Dictiona
 
 func assign_construction(building: BuildingState, builder_ids: Array[String]) -> void:
 	building.builder_unit_ids = builder_ids.duplicate()
-	building.worker_unit_ids = builder_ids.duplicate()
 	building.phase = GameEnums.BuildingPhase.BUILDING
 	building.days_left = build_days(building.type, builder_ids.size())
 
@@ -85,7 +84,6 @@ func remove_builder_from_construction(
 		return false
 	var had_one := building.builder_unit_ids.size() == 1
 	building.builder_unit_ids.remove_at(index)
-	building.worker_unit_ids.erase(unit_id)
 	var unit := state.units.get(unit_id) as UnitState
 	if unit != null:
 		unit.locked_by_construction = false
@@ -106,7 +104,6 @@ func reassign_builder_to_construction(
 	if building.builder_unit_ids.has(unit_id):
 		return {"valid": false, "reason": "Builder đã được gán"}
 	building.builder_unit_ids.append(unit_id)
-	building.worker_unit_ids.append(unit_id)
 	unit.locked_by_construction = true
 	unit.assigned_building_id = building_id
 	return {"valid": true, "reason": "Builder đã được gán"}
@@ -159,6 +156,7 @@ func unlock_builders(state: GameState, building_ids: Array[String]) -> void:
 			if unit != null and unit.assigned_building_id == building_id:
 				unit.assigned_building_id = ""
 				unit.locked_by_construction = false
+		building.builder_unit_ids.clear()
 
 
 func footprint(core_cell: Vector2i) -> Array[Vector2i]:
