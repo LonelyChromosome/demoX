@@ -1,0 +1,36 @@
+; Engine configuration file.
+; DemoX - PC 2D post-war chess management game
+
+config_version=5
+
+[application]
+
+config/name="DemoX"
+run/main_scene="res://src/app/main.tscn"
+config/features=PackedStringArray("4.3")
+boot_splash/show_image=false
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[input]
+
+end_day={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":32,"unicode":32)]
+}
+cancel_order={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194305)]
+}
