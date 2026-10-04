@@ -13,11 +13,11 @@ enum Phase {
 	COMMIT_BUILDING_PLACEMENT,
 	COMMIT_CANCEL_CONSTRUCTION,
 	COMMIT_DEMOLITION,
+	COMMIT_STAFFING,
 	RESOLVE_SYSTEMS,
 	FOOD_CONSUMPTION,
 	RESOLVE_EVENTS,
 	FINALIZE_DEMOLITION,
-	COMMIT_STAFFING,
 	FINALIZE_DAY,
 	START_NEXT_DAY,
 }
@@ -60,13 +60,13 @@ func resolve(
 	_run_phase(Phase.FOOD_CONSUMPTION, result)
 	if not food_system.resolve_consumption(state, result, building_system):
 		return result
-	_finish_resolution(state, snapshot, building_system, result)
+	_finish_resolution(state, building_system, result)
 	return result
 
 
 func resume_after_ration(
 	state: GameState,
-	snapshot: PendingOrderSnapshot,
+	_snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult,
 	fed_unit_ids: Array[String]
@@ -75,13 +75,12 @@ func resume_after_ration(
 		return result
 	if not food_system.apply_ration(state, result, fed_unit_ids, building_system):
 		return result
-	_finish_resolution(state, snapshot, building_system, result)
+	_finish_resolution(state, building_system, result)
 	return result
 
 
 func _finish_resolution(
 	state: GameState,
-	snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
