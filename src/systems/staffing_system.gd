@@ -2,6 +2,7 @@ class_name StaffingSystem
 extends RefCounted
 
 const MAX_FARM_STAFF := 6
+var building_system := BuildingSystem.new()
 
 
 func operational_cells(core_cell: Vector2i) -> Array[Vector2i]:
@@ -32,6 +33,145 @@ func is_operational_cell_available(state: GameState, cell: Vector2i) -> bool:
 			if is_operational_square(candidate, cell):
 				return true
 	return false
+
+
+func active_farm_at(state: GameState, cell: Vector2i) -> BuildingState:
+	for candidate in state.buildings.values():
+		if (
+			candidate is BuildingState
+			and candidate.type == GameEnums.BuildingType.FARM
+			and candidate.phase in [
+				GameEnums.BuildingPhase.ACTIVE, GameEnums.BuildingPhase.DEMOLISHING
+			]
+			and cell in building_system.footprint(candidate.core_cell)
+		):
+			return candidate
+	return null
+
+
+func can_plan_farm_move(
+	state: GameState,
+	farm: BuildingState,
+	unit_id: String,
+	target: Vector2i,
+	planned_targets: Dictionary
+) -> bool:
+	var count := 0
+	var footprint := building_system.footprint(farm.core_cell)
+	for candidate in state.units.values():
+		if not _is_valid_farm_person(candidate):
+			continue
+		var final_cell: Vector2i = planned_targets.get(candidate.id, candidate.board_cell)
+		if candidate.id == unit_id:
+			final_cell = target
+		if final_cell in footprint:
+			count += 1
+	return count <= MAX_FARM_STAFF
+
+
+func sync_active_farms_from_positions(state: GameState, result: TurnResolutionResult) -> void:
+	var farm_ids: Array[String] = []
+	var old_roles := {}
+	for candidate in state.buildings.values():
+		if (
+			candidate is BuildingState
+			and candidate.type == GameEnums.BuildingType.FARM
+			and candidate.phase in [
+				GameEnums.BuildingPhase.ACTIVE, GameEnums.BuildingPhase.DEMOLISHING
+			]
+		):
+			farm_ids.append(candidate.id)
+			if not candidate.manager_unit_id.is_empty():
+				old_roles[candidate.manager_unit_id] = {"building_id": candidate.id, "role": "manager"}
+			for worker_id in candidate.worker_unit_ids:
+				old_roles[worker_id] = {"building_id": candidate.id, "role": "worker"}
+	farm_ids.sort()
+
+	for unit in state.units.values():
+		if unit is UnitState and (old_roles.has(unit.id) or unit.work_building_id in farm_ids):
+			unit.work_building_id = ""
+			unit.is_manager = false
+
+	var new_roles := {}
+	for farm_id in farm_ids:
+		var farm := state.buildings.get(farm_id) as BuildingState
+		farm.manager_unit_id = ""
+		farm.worker_unit_ids.clear()
+		farm.job_slots.clear()
+
+		var core_unit := _valid_unit_at(state, farm.core_cell)
+		if core_unit != null:
+			farm.manager_unit_id = core_unit.id
+			farm.job_slots[farm.core_cell] = GameEnums.JobRole.MANAGER
+			core_unit.work_building_id = farm.id
+			core_unit.is_manager = true
+			new_roles[core_unit.id] = {"building_id": farm.id, "role": "manager"}
+
+		var worker_ids: Array[String] = []
+		for cell in operational_cells(farm.core_cell):
+			var worker := _valid_unit_at(state, cell)
+			if worker != null:
+				worker_ids.append(worker.id)
+		worker_ids.sort()
+		var remaining := MAX_FARM_STAFF - (1 if core_unit != null else 0)
+		for worker_index in range(mini(remaining, worker_ids.size())):
+			var worker_id := worker_ids[worker_index]
+			var worker := state.units.get(worker_id) as UnitState
+			farm.worker_unit_ids.append(worker_id)
+			farm.job_slots[worker.board_cell] = GameEnums.JobRole.FARM_WORKER
+			worker.work_building_id = farm.id
+			worker.is_manager = false
+			new_roles[worker_id] = {"building_id": farm.id, "role": "worker"}
+
+	_record_farm_role_changes(state, old_roles, new_roles, result)
+
+
+func _record_farm_role_changes(
+	state: GameState, old_roles: Dictionary, new_roles: Dictionary, result: TurnResolutionResult
+) -> void:
+	for unit_id in old_roles:
+		if not new_roles.has(unit_id) or new_roles[unit_id] != old_roles[unit_id]:
+			var unit := state.units.get(unit_id) as UnitState
+			result.farm_role_changes.append({
+				"unit_id": unit_id,
+				"unit_name": _unit_name(unit, unit_id),
+				"building_id": old_roles[unit_id].building_id,
+				"role": old_roles[unit_id].role,
+				"started": false,
+			})
+	for unit_id in new_roles:
+		if not old_roles.has(unit_id) or old_roles[unit_id] != new_roles[unit_id]:
+			var unit := state.units.get(unit_id) as UnitState
+			result.farm_role_changes.append({
+				"unit_id": unit_id,
+				"unit_name": _unit_name(unit, unit_id),
+				"building_id": new_roles[unit_id].building_id,
+				"role": new_roles[unit_id].role,
+				"started": true,
+			})
+
+
+func _valid_unit_at(state: GameState, cell: Vector2i) -> UnitState:
+	for candidate in state.units.values():
+		if _is_valid_farm_person(candidate) and candidate.board_cell == cell:
+			return candidate
+	return null
+
+
+func _is_valid_farm_person(candidate: Variant) -> bool:
+	return (
+		candidate is UnitState
+		and candidate.faction == GameEnums.Faction.PLAYER
+		and not candidate.locked_by_construction
+		and not candidate.locked_by_healing
+		and candidate.away_days_left <= 0
+	)
+
+
+func _unit_name(unit: UnitState, fallback: String) -> String:
+	if unit != null and not unit.display_name.is_empty():
+		return unit.display_name
+	return fallback
 
 
 func validate_orders(
@@ -102,7 +242,7 @@ func validate_orders(
 			if invalid_worker:
 				continue
 			if (1 if not manager_id.is_empty() else 0) + workers.size() > MAX_FARM_STAFF:
-				result.reject("staffing", order.building_id, "Farm tối đa 6 người")
+				result.reject("staffing", order.building_id, "Nông trại tối đa 6 người")
 				continue
 
 		var assigned_ids: Array[String] = []
