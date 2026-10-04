@@ -112,26 +112,26 @@ func _validate_moves(
 	var preliminary: Array[MoveUnitOrder] = []
 	for order in orders:
 		if order == null:
-			result.reject("move", "", "Order is missing")
+			result.reject("move", "", "Lệnh không còn tồn tại")
 			continue
 		var unit := state.units.get(order.unit_id) as UnitState
 		if unit == null:
-			result.reject("move", order.unit_id, "Unit no longer exists")
+			result.reject("move", order.unit_id, "Quân cờ không còn tồn tại")
 			continue
 		if not unit.can_be_moved():
-			result.reject("move", order.unit_id, "Unit is locked")
+			result.reject("move", order.unit_id, "Quân cờ đang bị khóa thao tác")
 			continue
 		if unit.board_cell != order.origin:
-			result.reject("move", order.unit_id, "Unit origin changed")
+			result.reject("move", order.unit_id, "Vị trí ban đầu của quân đã thay đổi")
 			continue
 		if not building_system.is_inside_board(order.target):
-			result.reject("move", order.unit_id, "Target is outside board")
+			result.reject("move", order.unit_id, "Vị trí đích nằm ngoài bàn cờ")
 			continue
 		if _occupied_by_other_unit(state, order.target, order.unit_id):
-			result.reject("move", order.unit_id, "Target is occupied")
+			result.reject("move", order.unit_id, "Vị trí đích đã có quân")
 			continue
 		if building_system.is_cell_occupied_by_building(state, order.target):
-			result.reject("move", order.unit_id, "Target is a physical building core")
+			result.reject("move", order.unit_id, "Vị trí đích là ô lõi công trình")
 			continue
 		preliminary.append(order)
 
@@ -142,7 +142,7 @@ func _validate_moves(
 	var valid: Array[MoveUnitOrder] = []
 	for order in preliminary:
 		if destination_counts[order.target] > 1:
-			result.reject("move", order.unit_id, "Multiple units target the same cell")
+			result.reject("move", order.unit_id, "Nhiều quân đang cùng nhắm tới một ô")
 		else:
 			valid.append(order)
 	return valid
@@ -164,7 +164,7 @@ func _validate_buildings(
 	var planned_builder_owner := {}
 	for order in orders:
 		if order == null:
-			result.reject("building", "", "Order is missing")
+			result.reject("building", "", "Lệnh không còn tồn tại")
 			continue
 		var validation := building_system.validate_placement(
 			state, order.core_cell, targets, reserved_cores
@@ -173,19 +173,20 @@ func _validate_buildings(
 			result.reject("building", order.building_id, validation.reason)
 			continue
 		if state.buildings.has(order.building_id):
-			result.reject("building", order.building_id, "Building id already exists")
+			result.reject("building", order.building_id, "Mã công trình đã tồn tại")
 			continue
-		var builders := building_system.validate_builders(state, order.builder_unit_ids)
-		if not builders.valid:
-			result.reject("building", order.building_id, builders.reason)
-			continue
+		if not order.builder_unit_ids.is_empty():
+			var builders := building_system.validate_builders(state, order.builder_unit_ids)
+			if not builders.valid:
+				result.reject("building", order.building_id, builders.reason)
+				continue
 		var builder_conflict := false
 		for builder_id in order.builder_unit_ids:
 			if planned_builder_owner.has(builder_id):
 				builder_conflict = true
 				break
 		if builder_conflict:
-			result.reject("building", order.building_id, "Builder đã thuộc planned building khác")
+			result.reject("building", order.building_id, "Thợ xây đã được phân cho công trình dự kiến khác")
 			continue
 		var cost := building_system.material_cost(order.building_type)
 		if materials_left < cost:
@@ -212,7 +213,7 @@ func _commit_moves(
 	for order in orders:
 		var unit := state.units.get(order.unit_id) as UnitState
 		if unit == null:
-			result.reject("move", order.unit_id, "Unit disappeared before commit")
+			result.reject("move", order.unit_id, "Quân cờ không còn tồn tại khi chốt ngày")
 			continue
 		unit.board_cell = order.target
 		result.committed_move_ids.append(order.unit_id)
@@ -227,7 +228,11 @@ func _commit_building(
 	if order == null:
 		return
 	var building := order.to_blueprint()
-	building_system.assign_construction(building, order.builder_unit_ids)
+	if order.builder_unit_ids.is_empty():
+		building.phase = GameEnums.BuildingPhase.BLUEPRINT
+		building.days_left = building_system.build_days(building.type, 1)
+	else:
+		building_system.assign_construction(building, order.builder_unit_ids)
 	state.buildings[order.building_id] = building
 	state.materials -= building_system.material_cost(order.building_type)
 	result.materials_spent += building_system.material_cost(order.building_type)
@@ -260,10 +265,10 @@ func _validate_cancel(
 		return null
 	var building := state.buildings.get(order.building_id) as BuildingState
 	if building == null:
-		result.reject("cancel_construction", order.building_id, "Building không tồn tại")
+		result.reject("cancel_construction", order.building_id, "Công trình không tồn tại")
 		return null
-	if building.phase != GameEnums.BuildingPhase.BUILDING:
-		result.reject("cancel_construction", order.building_id, "Chỉ được hủy BUILDING")
+	if building.phase not in [GameEnums.BuildingPhase.BLUEPRINT, GameEnums.BuildingPhase.BUILDING]:
+		result.reject("cancel_construction", order.building_id, "Chỉ được hủy bản vẽ hoặc công trình đang xây")
 		return null
 	return order
 
@@ -277,7 +282,7 @@ func _commit_cancel(
 		return
 	var refund := building_system.cancel_construction(state, order.building_id)
 	if refund < 0:
-		result.reject("cancel_construction", order.building_id, "Construction đã thay đổi")
+		result.reject("cancel_construction", order.building_id, "Trạng thái xây dựng đã thay đổi")
 		return
 	result.cancelled_building_ids.append(order.building_id)
 	result.refunded_materials += refund
@@ -290,7 +295,7 @@ func _commit_reassignments(
 ) -> void:
 	for order in orders:
 		if result.cancelled_building_ids.has(order.building_id):
-			result.reject("assign_builder", order.unit_id, "Building đã bị hủy trong turn")
+			result.reject("assign_builder", order.unit_id, "Công trình đã bị hủy trong ngày này")
 			continue
 		var assignment := building_system.reassign_builder_to_construction(
 			state, order.building_id, order.unit_id, order.slot_cell
@@ -312,7 +317,7 @@ func _commit_builder_removals(
 		if not building_system.remove_builder_from_construction(
 			state, order.building_id, order.unit_id
 		):
-			result.reject("remove_builder", order.unit_id, "Builder assignment không tồn tại")
+			result.reject("remove_builder", order.unit_id, "Phân công thợ xây không tồn tại")
 			continue
 		var building := state.buildings.get(order.building_id) as BuildingState
 		if building != null:
@@ -343,7 +348,7 @@ func _commit_demolition(
 	if building_system.start_demolition(state, order.building_id):
 		result.demolishing_building_ids.append(order.building_id)
 	else:
-		result.reject("demolition", order.building_id, "Demolition đã thay đổi")
+		result.reject("demolition", order.building_id, "Trạng thái phá dỡ đã thay đổi")
 
 func _finalize_demolition(
 	state: GameState, building_system: BuildingSystem, result: TurnResolutionResult
