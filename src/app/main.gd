@@ -50,6 +50,12 @@ func _build_shell() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(spacer)
 
+	var undo_button := Button.new()
+	undo_button.text = "↶ Undo"
+	undo_button.tooltip_text = "Hủy lựa chọn hoặc kế hoạch hiện tại"
+	undo_button.pressed.connect(_undo_current)
+	top.add_child(undo_button)
+
 	var report_button := Button.new()
 	report_button.text = "Báo cáo"
 	report_button.pressed.connect(_toggle_report)
@@ -96,6 +102,13 @@ func _spawn_piece(unit_id: String, unit_name: String, rank: GameEnums.Rank, cell
 	unit.rank = rank
 	unit.board_cell = cell
 	game_state.units[unit.id] = unit
+
+
+func _undo_current() -> void:
+	if building_placement_controller != null and building_placement_controller.undo_current():
+		return
+	if board_controller != null:
+		board_controller.undo_current()
 
 
 func _toggle_report() -> void:
