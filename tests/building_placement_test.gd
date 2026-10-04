@@ -44,7 +44,7 @@ func _init() -> void:
 
 	controller.cancel()
 	_check(controller.placement.planned_building == null, "cancel left planned building behind")
-	_check(turn_manager.pending_building == null, "cancel left queued building behind")
+	_check(turn_manager.get_planned_building() == null, "cancel left queued building behind")
 
 	controller.select_building(GameEnums.BuildingType.FARM)
 	controller._on_cell_pressed(Vector2i(3, 3))
@@ -55,7 +55,7 @@ func _init() -> void:
 	controller._on_cell_hovered(Vector2i(3, 3))
 	_check(not controller.placement.hover_valid, "overlapping building preview marked valid")
 	controller._on_cell_pressed(Vector2i(3, 3))
-	_check(turn_manager.pending_building == null, "overlapping building was queued")
+	_check(turn_manager.get_planned_building() == null, "overlapping building was queued")
 
 	print("BUILDING_PLACEMENT_TEST_OK")
 	quit(0)
