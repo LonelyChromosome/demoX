@@ -8,7 +8,6 @@ var faction: GameEnums.Faction = GameEnums.Faction.PLAYER
 var old_rank_tag := -1
 
 var board_cell := Vector2i(-1, -1)
-var planned_cell := Vector2i(-1, -1)
 
 var loyalty := 0
 var rebellion_level: GameEnums.RebellionLevel = GameEnums.RebellionLevel.NONE
