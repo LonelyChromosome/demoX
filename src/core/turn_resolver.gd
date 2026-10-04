@@ -30,8 +30,8 @@ func resolve(
 	result.resolved_day = state.day
 	_run_phase(Phase.VALIDATE_ORDERS, result)
 	var valid_moves := _validate_moves(state, snapshot.move_orders, building_system, result)
-	var valid_building := _validate_building(
-		state, snapshot.building_order, valid_moves, building_system, result
+	var valid_buildings := _validate_buildings(
+		state, snapshot.building_orders, valid_moves, building_system, result
 	)
 	var valid_cancel := _validate_cancel(state, snapshot.cancel_construction_order, result)
 	var valid_demolition := _validate_demolition(
@@ -42,7 +42,8 @@ func resolve(
 	_commit_moves(state, valid_moves, result)
 
 	_run_phase(Phase.COMMIT_BUILDING_PLACEMENT, result)
-	_commit_building(state, valid_building, building_system, result)
+	for building_order in valid_buildings:
+		_commit_building(state, building_order, building_system, result)
 
 	_run_phase(Phase.COMMIT_CANCEL_CONSTRUCTION, result)
 	_commit_cancel(state, valid_cancel, building_system, result)
@@ -129,11 +130,8 @@ func _validate_moves(
 		if _occupied_by_other_unit(state, order.target, order.unit_id):
 			result.reject("move", order.unit_id, "Target is occupied")
 			continue
-		if (
-			building_system.is_cell_occupied_by_building(state, order.target)
-			and not staffing_system.is_operational_cell_available(state, order.target)
-		):
-			result.reject("move", order.unit_id, "Target is inside a building area")
+		if building_system.is_cell_occupied_by_building(state, order.target):
+			result.reject("move", order.unit_id, "Target is a physical building core")
 			continue
 		preliminary.append(order)
 
@@ -150,35 +148,55 @@ func _validate_moves(
 	return valid
 
 
-func _validate_building(
+func _validate_buildings(
 	state: GameState,
-	order: PlaceBuildingOrder,
+	orders: Array[PlaceBuildingOrder],
 	valid_moves: Array[MoveUnitOrder],
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
-) -> PlaceBuildingOrder:
-	if order == null:
-		return null
+) -> Array[PlaceBuildingOrder]:
+	var valid: Array[PlaceBuildingOrder] = []
 	var targets: Array = []
 	for move in valid_moves:
-		if order.job_slots.get(move.target, GameEnums.JobRole.NONE) != GameEnums.JobRole.BUILDER:
-			targets.append(move.target)
-	var validation := building_system.validate_placement(state, order.core_cell, targets)
-	if not validation.valid:
-		result.reject("building", order.building_id, validation.reason)
-		return null
-	if state.buildings.has(order.building_id):
-		result.reject("building", order.building_id, "Building id already exists")
-		return null
-	var builders := building_system.validate_builders(state, order.builder_unit_ids)
-	if not builders.valid:
-		result.reject("building", order.building_id, builders.reason)
-		return null
-	var cost := building_system.material_cost(order.building_type)
-	if state.materials < cost:
-		result.reject("building", order.building_id, "Không đủ vật tư")
-		return null
-	return order
+		targets.append(move.target)
+	var reserved_cores: Array[Vector2i] = []
+	var materials_left := state.materials
+	var planned_builder_owner := {}
+	for order in orders:
+		if order == null:
+			result.reject("building", "", "Order is missing")
+			continue
+		var validation := building_system.validate_placement(
+			state, order.core_cell, targets, reserved_cores
+		)
+		if not validation.valid:
+			result.reject("building", order.building_id, validation.reason)
+			continue
+		if state.buildings.has(order.building_id):
+			result.reject("building", order.building_id, "Building id already exists")
+			continue
+		var builders := building_system.validate_builders(state, order.builder_unit_ids)
+		if not builders.valid:
+			result.reject("building", order.building_id, builders.reason)
+			continue
+		var builder_conflict := false
+		for builder_id in order.builder_unit_ids:
+			if planned_builder_owner.has(builder_id):
+				builder_conflict = true
+				break
+		if builder_conflict:
+			result.reject("building", order.building_id, "Builder đã thuộc planned building khác")
+			continue
+		var cost := building_system.material_cost(order.building_type)
+		if materials_left < cost:
+			result.reject("building", order.building_id, "Không đủ vật tư")
+			continue
+		materials_left -= cost
+		for builder_id in order.builder_unit_ids:
+			planned_builder_owner[builder_id] = order.building_id
+		reserved_cores.append(order.core_cell)
+		valid.append(order)
+	return valid
 
 
 func _occupied_by_other_unit(state: GameState, cell: Vector2i, moving_unit_id: String) -> bool:

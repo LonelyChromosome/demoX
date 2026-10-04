@@ -35,7 +35,7 @@ func _ready() -> void:
 	confirm_button.pressed.connect(_confirm)
 	footer.add_child(confirm_button)
 	var cancel_button := Button.new()
-	cancel_button.text = "Hủy"
+	cancel_button.text = "Đóng"
 	cancel_button.pressed.connect(close)
 	footer.add_child(cancel_button)
 
@@ -87,8 +87,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		close()
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-		close()
+		get_viewport().set_input_as_handled()
 
 
 func _input(event: InputEvent) -> void:
@@ -96,7 +95,9 @@ func _input(event: InputEvent) -> void:
 		visible
 		and event is InputEventMouseButton
 		and event.pressed
-		and event.button_index == MOUSE_BUTTON_LEFT
+		and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]
 		and not get_global_rect().has_point(event.global_position)
 	):
 		close()
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			get_viewport().set_input_as_handled()

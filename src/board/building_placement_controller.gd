@@ -46,7 +46,6 @@ func setup(
 func select_building(type: GameEnums.BuildingType) -> void:
 	if not turn_manager.can_edit_orders():
 		return
-	turn_manager.cancel_building()
 	placement.select(type)
 	palette.set_active_type(type)
 	palette.set_status("Di chuột lên bàn cờ để xem vùng 3x3")
@@ -57,7 +56,8 @@ func select_building(type: GameEnums.BuildingType) -> void:
 func cancel() -> void:
 	if not turn_manager.can_edit_orders():
 		return
-	turn_manager.cancel_building()
+	if placement.planned_building != null:
+		turn_manager.cancel_building(placement.planned_building.id)
 	placement.cancel()
 	palette.clear_active_type()
 	palette.set_status("Đã hủy bản thiết kế")
@@ -228,7 +228,9 @@ func _building_name(type: GameEnums.BuildingType) -> String:
 
 func _refresh_view() -> void:
 	if view != null:
-		view.present_buildings(state.buildings, placement, building_system)
+		view.present_buildings(
+			state.buildings, turn_manager.get_planned_buildings(), placement, building_system
+		)
 	_refresh_staffing_status()
 
 func _first_active_staffing_building() -> BuildingState:
@@ -273,6 +275,10 @@ func _cell_name(cell: Vector2i) -> String:
 
 
 func _validate(cell: Vector2i) -> Dictionary:
+	var planned_cores: Array[Vector2i] = []
+	for building in turn_manager.get_planned_buildings():
+		if building.placement_valid:
+			planned_cores.append(building.core_cell)
 	return building_system.validate_placement(
-		state, cell, turn_manager.get_planned_move_targets().values()
+		state, cell, turn_manager.get_planned_move_targets().values(), planned_cores
 	)

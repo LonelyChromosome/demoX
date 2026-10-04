@@ -179,7 +179,10 @@ func footprint(core_cell: Vector2i) -> Array[Vector2i]:
 
 
 func validate_placement(
-	state: GameState, core_cell: Vector2i, planned_unit_cells: Array = []
+	state: GameState,
+	core_cell: Vector2i,
+	planned_unit_cells: Array = [],
+	planned_building_cores: Array[Vector2i] = []
 ) -> Dictionary:
 	var cells := footprint(core_cell)
 	for cell in cells:
@@ -190,15 +193,19 @@ func validate_placement(
 	for cell in cells:
 		if occupied_by_buildings.has(cell):
 			return {"valid": false, "reason": "Trùng vùng công trình khác"}
+	for planned_core in planned_building_cores:
+		for cell in cells:
+			if cell in footprint(planned_core):
+				return {"valid": false, "reason": "Trùng vùng công trình dự kiến khác"}
 
 	for candidate in state.units.values():
 		if not (candidate is UnitState):
 			continue
-		if candidate.board_cell in cells:
-			return {"valid": false, "reason": "Xung đột vị trí quân cờ"}
+		if candidate.board_cell == core_cell:
+			return {"valid": false, "reason": "Core bị quân cờ chiếm"}
 	for planned_cell in planned_unit_cells:
-		if planned_cell in cells:
-			return {"valid": false, "reason": "Xung đột vị trí quân cờ dự kiến"}
+		if planned_cell == core_cell:
+			return {"valid": false, "reason": "Core bị quân cờ dự kiến chiếm"}
 
 	return {"valid": true, "reason": "Vị trí hợp lệ"}
 
@@ -214,7 +221,22 @@ func _building_cells(buildings: Dictionary) -> Dictionary:
 
 
 func is_cell_occupied_by_building(state: GameState, cell: Vector2i) -> bool:
+	for candidate in state.buildings.values():
+		if candidate is BuildingState and candidate.core_cell == cell:
+			return true
+	return false
+
+
+func is_cell_reserved_by_building(state: GameState, cell: Vector2i) -> bool:
 	return _building_cells(state.buildings).has(cell)
+
+
+func operational_cells(core_cell: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for cell in footprint(core_cell):
+		if cell != core_cell:
+			cells.append(cell)
+	return cells
 
 
 func building_at_cell(state: GameState, cell: Vector2i) -> BuildingState:

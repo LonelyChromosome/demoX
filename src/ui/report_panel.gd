@@ -24,10 +24,18 @@ func _ready() -> void:
 func show_result(result: TurnResolutionResult) -> void:
 	var lines: Array[String] = []
 	lines.append("Ngày %d → %d" % [result.resolved_day, result.next_day])
-	lines.append("Food: +%d / ăn %d" % [result.food_produced, result.food_consumed])
-	lines.append("Materials: +%d / xây %d" % [result.materials_produced, result.materials_spent])
+	var food_delta := result.food_produced - result.food_consumed
+	var material_delta := result.materials_produced - result.materials_spent + result.refunded_materials
+	if food_delta != 0:
+		lines.append("Food: %s%d" % ["+" if food_delta > 0 else "", food_delta])
+	if material_delta != 0:
+		lines.append("Materials: %s%d" % ["+" if material_delta > 0 else "", material_delta])
+	if food_delta == 0 and material_delta == 0:
+		lines.append("Tài nguyên: không đổi")
 	if not result.starved_unit_ids.is_empty():
 		lines.append("Chết đói: %s" % ", ".join(result.starved_unit_ids))
 	if not result.rejected_orders.is_empty():
 		lines.append("Lệnh bị từ chối: %d" % result.rejected_orders.size())
+		for rejection in result.rejected_orders:
+			lines.append("• %s %s: %s" % [rejection.kind, rejection.id, rejection.reason])
 	body_label.text = "\n".join(lines)

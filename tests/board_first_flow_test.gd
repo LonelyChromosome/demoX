@@ -48,8 +48,8 @@ func _test_staff_slot_move_and_unassign() -> void:
 
 func _test_cancel_planned_building() -> void:
 	var context := _context()
-	context.manager.queue_building_plan(GameEnums.BuildingType.FARM, Vector2i(3, 3))
-	context.manager.cancel_building()
+	var farm := context.manager.queue_building_plan(GameEnums.BuildingType.FARM, Vector2i(3, 3))
+	context.manager.cancel_building(farm.id)
 	context.manager.end_day()
 	_check(context.state.buildings.is_empty(), "Cancelled contextual Farm committed")
 

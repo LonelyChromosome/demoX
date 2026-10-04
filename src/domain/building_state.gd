@@ -7,6 +7,8 @@ var core_cell := Vector2i(-1, -1)
 var phase: GameEnums.BuildingPhase = GameEnums.BuildingPhase.BLUEPRINT
 var days_left := 0
 var builder_unit_ids: Array[String] = []
+var placement_valid := true
+var placement_reason := "Vị trí hợp lệ"
 
 var manager_unit_id := ""
 var worker_unit_ids: Array[String] = []

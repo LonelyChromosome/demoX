@@ -4,7 +4,8 @@ extends RefCounted
 signal changed
 
 var _move_orders: Dictionary = {}
-var _building_order: PlaceBuildingOrder
+var _building_orders: Dictionary = {}
+var _building_sequence: Array[String] = []
 var _cancel_construction_order: CancelConstructionOrder
 var _assign_builder_orders: Dictionary = {}
 var _remove_builder_orders: Dictionary = {}
@@ -46,23 +47,35 @@ func move_count() -> int:
 
 
 func plan_building(order: PlaceBuildingOrder) -> void:
-	if _building_order != null and _building_order.building_id != order.building_id:
-		_planned_job_slots.erase(_building_order.building_id)
-		_planned_builder_cells.clear()
-	_building_order = order
+	if not _building_orders.has(order.building_id):
+		_building_sequence.append(order.building_id)
+	_building_orders[order.building_id] = order
 	changed.emit()
 
 
-func cancel_building() -> void:
-	if _building_order != null:
-		_planned_job_slots.erase(_building_order.building_id)
-		_planned_builder_cells.clear()
-		_building_order = null
+func cancel_building(building_id: String) -> void:
+	if _building_orders.erase(building_id):
+		_building_sequence.erase(building_id)
+		_planned_job_slots.erase(building_id)
+		for unit_id in _planned_builder_cells.keys():
+			var assignment: Dictionary = _planned_builder_cells[unit_id]
+			if assignment.building_id == building_id:
+				_planned_builder_cells.erase(unit_id)
+				_move_orders.erase(unit_id)
 		changed.emit()
 
 
-func get_building() -> PlaceBuildingOrder:
-	return _building_order
+func get_building(building_id: String) -> PlaceBuildingOrder:
+	return _building_orders.get(building_id) as PlaceBuildingOrder
+
+
+func get_buildings() -> Array[PlaceBuildingOrder]:
+	var result: Array[PlaceBuildingOrder] = []
+	for building_id in _building_sequence:
+		var order := get_building(building_id)
+		if order != null:
+			result.append(order)
+	return result
 
 func plan_cancel_construction(building_id: String) -> CancelConstructionOrder:
 	_cancel_construction_order = CancelConstructionOrder.new(building_id)
@@ -95,11 +108,12 @@ func plan_job_slot(building_id: String, cell: Vector2i, role: GameEnums.JobRole)
 	# NONE is an explicit tombstone so a planned clear can override authoritative slots.
 	slots[cell] = role
 	_planned_job_slots[building_id] = slots
-	if _building_order != null and _building_order.building_id == building_id:
-		_building_order.job_slots.clear()
+	var building_order := get_building(building_id)
+	if building_order != null:
+		building_order.job_slots.clear()
 		for slot_cell in slots:
 			if slots[slot_cell] != GameEnums.JobRole.NONE:
-				_building_order.job_slots[slot_cell] = slots[slot_cell]
+				building_order.job_slots[slot_cell] = slots[slot_cell]
 	var staffing := _staffing_orders.get(building_id) as SetBuildingStaffOrder
 	if staffing != null:
 		if role == GameEnums.JobRole.NONE:
@@ -111,40 +125,52 @@ func plan_job_slot(building_id: String, cell: Vector2i, role: GameEnums.JobRole)
 func planned_job_slots(building_id: String) -> Dictionary:
 	return (_planned_job_slots.get(building_id, {}) as Dictionary).duplicate(true)
 
-func add_planned_builder(unit_id: String, cell: Vector2i) -> bool:
-	if _building_order == null:
+func add_planned_builder(building_id: String, unit_id: String, cell: Vector2i) -> bool:
+	var building_order := get_building(building_id)
+	if building_order == null:
 		return false
-	if not _building_order.builder_unit_ids.has(unit_id):
-		_building_order.builder_unit_ids.append(unit_id)
+	if not building_order.builder_unit_ids.has(unit_id):
+		building_order.builder_unit_ids.append(unit_id)
 	if _planned_builder_cells.has(unit_id):
-		var old_cell: Vector2i = _planned_builder_cells[unit_id]
-		if old_cell != cell:
-			var slots: Dictionary = _planned_job_slots.get(_building_order.building_id, {})
+		var old_assignment: Dictionary = _planned_builder_cells[unit_id]
+		var old_cell: Vector2i = old_assignment.cell
+		if old_cell != cell or old_assignment.building_id != building_id:
+			var old_order := get_building(old_assignment.building_id)
+			if old_order != null:
+				old_order.builder_unit_ids.erase(unit_id)
+				old_order.job_slots.erase(old_cell)
+			var slots: Dictionary = _planned_job_slots.get(old_assignment.building_id, {})
 			slots.erase(old_cell)
-	_planned_builder_cells[unit_id] = cell
-	plan_job_slot(_building_order.building_id, cell, GameEnums.JobRole.BUILDER)
+	_planned_builder_cells[unit_id] = {"building_id": building_id, "cell": cell}
+	plan_job_slot(building_id, cell, GameEnums.JobRole.BUILDER)
 	return true
 
-func remove_planned_builder_at(cell: Vector2i) -> Array[String]:
+func remove_planned_builder_at(building_id: String, cell: Vector2i) -> Array[String]:
 	var removed: Array[String] = []
-	if _building_order == null:
+	var building_order := get_building(building_id)
+	if building_order == null:
 		return removed
 	for unit_id in _planned_builder_cells.keys():
-		if _planned_builder_cells[unit_id] == cell:
-			_building_order.builder_unit_ids.erase(unit_id)
+		var assignment: Dictionary = _planned_builder_cells[unit_id]
+		if assignment.building_id == building_id and assignment.cell == cell:
+			building_order.builder_unit_ids.erase(unit_id)
 			_planned_builder_cells.erase(unit_id)
 			removed.append(unit_id)
 	return removed
 
 func remove_planned_builder(unit_id: String) -> void:
-	if _building_order == null or not _planned_builder_cells.has(unit_id):
+	if not _planned_builder_cells.has(unit_id):
 		return
-	var old_cell: Vector2i = _planned_builder_cells[unit_id]
+	var assignment: Dictionary = _planned_builder_cells[unit_id]
+	var old_cell: Vector2i = assignment.cell
+	var building_order := get_building(assignment.building_id)
 	_planned_builder_cells.erase(unit_id)
-	_building_order.builder_unit_ids.erase(unit_id)
-	var slots: Dictionary = _planned_job_slots.get(_building_order.building_id, {})
+	if building_order == null:
+		return
+	building_order.builder_unit_ids.erase(unit_id)
+	var slots: Dictionary = _planned_job_slots.get(building_order.building_id, {})
 	slots.erase(old_cell)
-	_building_order.job_slots.erase(old_cell)
+	building_order.job_slots.erase(old_cell)
 	changed.emit()
 
 func plan_staffing(order: SetBuildingStaffOrder) -> void:
@@ -192,8 +218,8 @@ func snapshot() -> PendingOrderSnapshot:
 		var order := _move_orders[unit_id] as MoveUnitOrder
 		if order != null:
 			result.move_orders.append(order.copy())
-	if _building_order != null:
-		result.building_order = _building_order.copy()
+	for order in get_buildings():
+		result.building_orders.append(order.copy())
 	if _cancel_construction_order != null:
 		result.cancel_construction_order = _cancel_construction_order.copy()
 	if _demolish_building_order != null:
@@ -214,7 +240,8 @@ func snapshot() -> PendingOrderSnapshot:
 func clear() -> void:
 	var had_orders := not is_empty()
 	_move_orders.clear()
-	_building_order = null
+	_building_orders.clear()
+	_building_sequence.clear()
 	_cancel_construction_order = null
 	_demolish_building_order = null
 	_staffing_orders.clear()
@@ -229,7 +256,7 @@ func clear() -> void:
 func is_empty() -> bool:
 	return (
 		_move_orders.is_empty()
-		and _building_order == null
+		and _building_orders.is_empty()
 		and _cancel_construction_order == null
 		and _demolish_building_order == null
 		and _staffing_orders.is_empty()

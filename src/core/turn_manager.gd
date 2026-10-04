@@ -108,6 +108,7 @@ func queue_building(
 	var order := PlaceBuildingOrder.new(
 		_next_building_id(), type, core_cell, state.day, builder_ids
 	)
+	_update_order_placement_validation(order, _planned_cores())
 	order_queue.plan_building(order)
 	return order.to_blueprint()
 
@@ -115,13 +116,14 @@ func queue_building_plan(type: GameEnums.BuildingType, core_cell: Vector2i) -> B
 	if not can_edit_orders():
 		return null
 	var order := PlaceBuildingOrder.new(_next_building_id(), type, core_cell, state.day, [])
+	_update_order_placement_validation(order, _planned_cores())
 	order_queue.plan_building(order)
 	return order.to_blueprint()
 
 
-func cancel_building() -> void:
+func cancel_building(building_id: String) -> void:
 	if can_edit_orders():
-		order_queue.cancel_building()
+		order_queue.cancel_building(building_id)
 
 func queue_cancel_construction(building_id: String) -> CancelConstructionOrder:
 	if not can_edit_orders():
@@ -188,8 +190,7 @@ func get_planned_job_slots(building_id: String) -> Dictionary:
 	return order_queue.planned_job_slots(building_id)
 
 func get_job_slot_at(cell: Vector2i) -> Dictionary:
-	var planned_building := get_planned_building()
-	if planned_building != null:
+	for planned_building in get_planned_buildings():
 		var planned_slots := order_queue.planned_job_slots(planned_building.id)
 		if planned_slots.has(cell):
 			if planned_slots[cell] == GameEnums.JobRole.NONE:
@@ -233,10 +234,10 @@ func plan_job_drop(unit_id: String, cell: Vector2i) -> bool:
 	if role != GameEnums.JobRole.BUILDER:
 		order_queue.remove_planned_builder(unit_id)
 	_plan_staff_unassign(unit_id, building_id)
-	var planned_building := get_planned_building()
+	var planned_building := get_planned_building(building_id)
 	if role == GameEnums.JobRole.BUILDER:
-		if planned_building != null and planned_building.id == building_id:
-			return order_queue.add_planned_builder(unit_id, cell)
+		if planned_building != null:
+			return order_queue.add_planned_builder(building_id, unit_id, cell)
 		return queue_assign_builder(building_id, unit_id, cell) != null
 	var building := state.buildings.get(building_id) as BuildingState
 	if building == null:
@@ -267,9 +268,9 @@ func plan_clear_job_slot(building_id: String, cell: Vector2i) -> void:
 	if not can_edit_orders():
 		return
 	var building := state.buildings.get(building_id) as BuildingState
-	var planned_building := get_planned_building()
-	if planned_building != null and planned_building.id == building_id:
-		for unit_id in order_queue.remove_planned_builder_at(cell):
+	var planned_building := get_planned_building(building_id)
+	if planned_building != null:
+		for unit_id in order_queue.remove_planned_builder_at(building_id, cell):
 			order_queue.cancel_move(unit_id)
 	if building != null and building.phase == GameEnums.BuildingPhase.BUILDING:
 		for builder_id in building.builder_unit_ids:
@@ -397,9 +398,46 @@ func get_pending_move_count() -> int:
 	return order_queue.move_count()
 
 
-func get_planned_building() -> BuildingState:
-	var order := order_queue.get_building()
+func get_planned_building(building_id: String) -> BuildingState:
+	var order := order_queue.get_building(building_id)
 	return order.to_blueprint() if order != null else null
+
+
+func get_planned_buildings() -> Array[BuildingState]:
+	var buildings: Array[BuildingState] = []
+	var reserved_cores: Array[Vector2i] = []
+	for order in order_queue.get_buildings():
+		_update_order_placement_validation(order, reserved_cores)
+		if order.placement_valid:
+			reserved_cores.append(order.core_cell)
+		buildings.append(order.to_blueprint())
+	return buildings
+
+
+func _planned_cores() -> Array[Vector2i]:
+	var cores: Array[Vector2i] = []
+	for order in order_queue.get_buildings():
+		_update_order_placement_validation(order, cores)
+		if order.placement_valid:
+			cores.append(order.core_cell)
+	return cores
+
+
+func _update_order_placement_validation(
+	order: PlaceBuildingOrder, reserved_cores: Array[Vector2i]
+) -> void:
+	var validation := building_system.validate_placement(
+		state, order.core_cell, get_planned_move_targets().values(), reserved_cores
+	)
+	order.placement_valid = validation.valid
+	order.placement_reason = validation.reason
+
+
+func get_planned_building_at_cell(cell: Vector2i) -> BuildingState:
+	for building in get_planned_buildings():
+		if cell in building_system.footprint(building.core_cell):
+			return building
+	return null
 
 
 func get_default_builder_ids() -> Array[String]:
@@ -416,9 +454,9 @@ func has_pending_orders() -> bool:
 
 
 func _next_building_id() -> String:
-	var index := state.buildings.size() + 1
+	var index := state.buildings.size() + get_planned_buildings().size() + 1
 	var candidate := "building_%d" % index
-	while state.buildings.has(candidate):
+	while state.buildings.has(candidate) or order_queue.get_building(candidate) != null:
 		index += 1
 		candidate = "building_%d" % index
 	return candidate

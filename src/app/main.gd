@@ -16,6 +16,7 @@ var day_label: Label
 var resource_label: Label
 var visual_transition := false
 var status_label: Label
+var resource_delta_label: Label
 
 
 func _ready() -> void:
@@ -30,7 +31,6 @@ func _ready() -> void:
 	add_child(contextual_controller)
 	contextual_controller.setup(game_state, turn_manager, board, context_popup)
 	board_controller.context_requested.connect(contextual_controller.open_for_cell)
-	board_controller.unit_context_requested.connect(contextual_controller.open_for_unit)
 	board_controller.view_changed.connect(contextual_controller.refresh)
 	board.resolution_animation_finished.connect(_on_resolution_animation_finished)
 	if DEV_MODE:
@@ -67,6 +67,9 @@ func _build_shell() -> void:
 	resource_label = Label.new()
 	resource_label.add_theme_font_size_override("font_size", 18)
 	top.add_child(resource_label)
+	resource_delta_label = Label.new()
+	resource_delta_label.add_theme_color_override("font_color", Color("79d8a5"))
+	top.add_child(resource_delta_label)
 	status_label = Label.new()
 	status_label.add_theme_color_override("font_color", Color("d9b86c"))
 	top.add_child(status_label)
@@ -76,8 +79,8 @@ func _build_shell() -> void:
 	top.add_child(spacer)
 
 	var undo_button := Button.new()
-	undo_button.text = "↶ Undo"
-	undo_button.tooltip_text = "Hủy lựa chọn hoặc kế hoạch hiện tại"
+	undo_button.text = "Đóng / Bỏ chọn"
+	undo_button.tooltip_text = "Đóng panel hoặc bỏ thao tác tạm thời; không hủy planned order"
 	undo_button.pressed.connect(_undo_current)
 	top.add_child(undo_button)
 
@@ -136,7 +139,13 @@ func _spawn_piece(unit_id: String, unit_name: String, rank: GameEnums.Rank, cell
 	unit.display_name = unit_name
 	unit.rank = rank
 	unit.board_cell = cell
+	unit.backstory.append("Sống sót sau những ngày thành trì mất màu.")
+	unit.backstory.append("Được Vua tập hợp lại tại %s." % _cell_name(cell))
 	game_state.units[unit.id] = unit
+
+
+func _cell_name(cell: Vector2i) -> String:
+	return "%s%d" % [String.chr(65 + cell.x), 8 - cell.y]
 
 
 func _undo_current() -> void:
@@ -173,10 +182,11 @@ func _on_day_started(_day: int) -> void:
 func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	_refresh_header()
 	report_panel.show_result(result)
+	_show_resource_delta(result)
 	if not result.starved_unit_ids.is_empty():
 		status_label.text = "Chết đói: %s" % ", ".join(result.starved_unit_ids)
 	else:
-		status_label.text = "+%d Food · +%d Materials" % [result.food_produced, result.materials_produced]
+		status_label.text = "Đã giải quyết Ngày %02d" % result.resolved_day
 
 
 func _on_ration_requested(result: TurnResolutionResult) -> void:
@@ -191,6 +201,20 @@ func _on_resolution_animation_finished() -> void:
 	visual_transition = false
 
 
+func _show_resource_delta(result: TurnResolutionResult) -> void:
+	var food_delta := result.food_produced - result.food_consumed
+	var material_delta := result.materials_produced - result.materials_spent + result.refunded_materials
+	var parts: Array[String] = []
+	if food_delta != 0:
+		parts.append("Food %s%d" % ["+" if food_delta > 0 else "", food_delta])
+	if material_delta != 0:
+		parts.append("Materials %s%d" % ["+" if material_delta > 0 else "", material_delta])
+	resource_delta_label.text = "   " + " · ".join(parts) if not parts.is_empty() else ""
+	resource_delta_label.modulate.a = 1.0
+	if not parts.is_empty():
+		create_tween().tween_property(resource_delta_label, "modulate:a", 0.0, 1.4).set_delay(0.6)
+
+
 func _on_placement_mode_changed(active: bool) -> void:
 	board_controller.set_input_enabled(not active)
 
@@ -198,3 +222,4 @@ func _on_placement_mode_changed(active: bool) -> void:
 func _refresh_header() -> void:
 	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
 	resource_label.text = "   Food %d   ·   Materials %d" % [game_state.food, game_state.materials]
+	board.set_day(game_state.day, game_state.day > 1)

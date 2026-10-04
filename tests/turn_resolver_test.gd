@@ -60,20 +60,20 @@ func _test_building_commit_cancel_and_replace() -> void:
 	var farm := state.buildings.values()[0] as BuildingState
 	_check(farm.phase == GameEnums.BuildingPhase.BUILDING, "building did not enter construction")
 
-	manager.queue_building(GameEnums.BuildingType.PRISON, Vector2i(6, 6))
-	manager.cancel_building()
+	var cancelled := manager.queue_building(GameEnums.BuildingType.PRISON, Vector2i(6, 6))
+	manager.cancel_building(cancelled.id)
 	manager.end_day()
 	_check(state.buildings.size() == 1, "cancelled building was committed")
 
-	manager.queue_building(GameEnums.BuildingType.INFIRMARY, Vector2i(1, 5))
-	manager.queue_building(GameEnums.BuildingType.BARRACKS, Vector2i(6, 1))
+	manager.queue_building(GameEnums.BuildingType.INFIRMARY, Vector2i(1, 6), ["builder_1"])
+	manager.queue_building(GameEnums.BuildingType.BARRACKS, Vector2i(6, 1), ["builder_2"])
 	manager.end_day()
-	_check(state.buildings.size() == 2, "replaced building order committed wrong count")
+	_check(state.buildings.size() == 3, "multiple building orders did not all commit")
 	var barracks_found := false
 	for candidate in state.buildings.values():
 		if candidate is BuildingState and candidate.type == GameEnums.BuildingType.BARRACKS:
 			barracks_found = candidate.core_cell == Vector2i(6, 1)
-	_check(barracks_found, "only the last building position/type should commit")
+	_check(barracks_found, "planned Barracks did not commit")
 
 
 func _test_invalid_and_conflicting_orders() -> void:

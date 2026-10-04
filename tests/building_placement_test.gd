@@ -7,6 +7,7 @@ func _init() -> void:
 	root.add_child(turn_manager)
 	turn_manager.setup(state)
 	state.materials = 4
+	state.food = 100
 
 	var board := BoardView.new()
 	board.size = Vector2(900, 900)
@@ -30,9 +31,10 @@ func _init() -> void:
 	builder.board_cell = Vector2i(7, 0)
 	state.units[builder.id] = builder
 	_check(
-		not system.validate_placement(state, Vector2i(4, 6)).valid,
-		"placement overlapping a chess piece accepted"
+		system.validate_placement(state, Vector2i(4, 6)).valid,
+		"unit on operational square incorrectly blocked placement"
 	)
+	_check(not system.validate_placement(state, Vector2i(4, 7)).valid, "unit on core was accepted")
 
 	controller.select_building(GameEnums.BuildingType.FARM)
 	controller._on_cell_hovered(Vector2i(3, 3))
@@ -41,15 +43,15 @@ func _init() -> void:
 	_check(state.buildings.is_empty(), "planned building committed before End Day")
 	_check(controller.placement.planned_building != null, "planned ghost was not created")
 
-	controller._on_cell_pressed(Vector2i(5, 3))
-	_check(
-		controller.placement.planned_building.core_cell == Vector2i(5, 3),
-		"planned position did not change"
-	)
+	var first_id := controller.placement.planned_building.id
+	controller._on_cell_pressed(Vector2i(6, 3))
+	_check(turn_manager.get_planned_buildings().size() == 2, "second planned building replaced first")
 
 	controller.cancel()
 	_check(controller.placement.planned_building == null, "cancel left planned building behind")
-	_check(turn_manager.get_planned_building() == null, "cancel left queued building behind")
+	_check(turn_manager.get_planned_buildings().size() == 1, "cancel removed wrong planned buildings")
+	turn_manager.cancel_building(first_id)
+	_check(turn_manager.get_planned_buildings().is_empty(), "cancel left queued building behind")
 
 	controller.select_building(GameEnums.BuildingType.FARM)
 	controller._on_cell_pressed(Vector2i(3, 3))
@@ -60,7 +62,7 @@ func _init() -> void:
 	controller._on_cell_hovered(Vector2i(3, 3))
 	_check(not controller.placement.hover_valid, "overlapping building preview marked valid")
 	controller._on_cell_pressed(Vector2i(3, 3))
-	_check(turn_manager.get_planned_building() == null, "overlapping building was queued")
+	_check(turn_manager.get_planned_buildings().is_empty(), "overlapping building was queued")
 
 	print("BUILDING_PLACEMENT_TEST_OK")
 	quit(0)

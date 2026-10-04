@@ -4,6 +4,7 @@ extends SceneTree
 func _init() -> void:
 	_test_automatic_consumption()
 	_test_manual_ration_and_starvation()
+	_test_exact_day_three_boundary()
 	_test_three_consecutive_days_and_reset()
 	_test_exempt_and_away_units()
 	print("FOOD_CONSUMPTION_TEST_OK")
@@ -63,6 +64,24 @@ func _test_exempt_and_away_units() -> void:
 	_check(result.food_consumed == 0, "Exempt/away units consumed food")
 
 
+func _test_exact_day_three_boundary() -> void:
+	var context := _context(0)
+	var pawn := _unit(context.state, "boundary_pawn", GameEnums.Rank.PAWN)
+	for completed_day in [1, 2]:
+		var paused: TurnResolutionResult = context.manager.end_day()
+		_check(paused.awaiting_ration, "Unfed day did not reach ration resolution")
+		_check(context.state.units.has(pawn.id), "Unit died before ration resolution")
+		context.manager.submit_ration([])
+		_check(context.state.units.has(pawn.id), "Unit died before three completed unfed days")
+		_check(context.state.day == completed_day + 1, "Day did not advance after ration resolution")
+	_check(context.state.day == 3 and context.state.units.has(pawn.id), "Unit was not alive at start of Day 3")
+	var day_three: TurnResolutionResult = context.manager.end_day()
+	_check(day_three.awaiting_ration and context.state.units.has(pawn.id), "Unit died before End Day 3 ration commit")
+	var death: TurnResolutionResult = context.manager.submit_ration([])
+	_check(not context.state.units.has(pawn.id), "Unit survived three completed unfed days")
+	_check(death.starved_unit_ids == [pawn.id], "Day 3 starvation death was not reported")
+
+
 func _test_three_consecutive_days_and_reset() -> void:
 	var context := _context(0)
 	var pawn := _unit(context.state, "pawn", GameEnums.Rank.PAWN)
@@ -76,7 +95,10 @@ func _test_three_consecutive_days_and_reset() -> void:
 		context.manager.end_day()
 		context.manager.submit_ration([])
 		_check(pawn.hunger_streak == expected, "Consecutive hunger count is wrong")
+	_check(context.state.units.has(pawn.id), "Unit died before completing the third unfed End Day")
+	_check(pawn.hunger_streak == 2, "Unit was not alive at the start of starvation Day 3")
 	context.manager.end_day()
+	_check(context.state.units.has(pawn.id), "Unit died before Day 3 ration resolution")
 	var death: TurnResolutionResult = context.manager.submit_ration([])
 	_check(death.starved_unit_ids == [pawn.id], "Exactly three consecutive unfed days did not kill")
 
