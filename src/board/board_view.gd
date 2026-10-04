@@ -41,6 +41,7 @@ const BUILDING_COLORS := {
 
 var selected_cell := Vector2i(-1, -1)
 var units: Dictionary = {}
+var planned_moves: Dictionary = {}
 var selected_unit_id := ""
 var buildings: Dictionary = {}
 var placement: BuildingPlacementState
@@ -55,8 +56,11 @@ func _ready() -> void:
 	queue_redraw()
 
 
-func present(current_units: Dictionary, current_selected_unit_id: String) -> void:
+func present(
+	current_units: Dictionary, current_selected_unit_id: String, current_planned_moves: Dictionary = {}
+) -> void:
 	units = current_units
+	planned_moves = current_planned_moves
 	selected_unit_id = current_selected_unit_id
 	selected_cell = Vector2i(-1, -1)
 	var selected := units.get(selected_unit_id) as UnitState
@@ -255,10 +259,12 @@ func _draw_units(origin: Vector2, tile: float) -> void:
 			continue
 		_draw_piece(candidate, candidate.board_cell, origin, tile, false)
 
-	for candidate in units.values():
-		if not (candidate is UnitState) or not is_inside(candidate.planned_cell):
+	for unit_id in planned_moves:
+		var candidate := units.get(unit_id) as UnitState
+		var planned_cell: Vector2i = planned_moves[unit_id]
+		if candidate == null or not is_inside(planned_cell):
 			continue
-		_draw_piece(candidate, candidate.planned_cell, origin, tile, true)
+		_draw_piece(candidate, planned_cell, origin, tile, true)
 
 
 func _draw_piece(
