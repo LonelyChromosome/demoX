@@ -106,13 +106,20 @@ func _plan_move(unit_id: String, target: Vector2i) -> bool:
 		view.flash_invalid_cell(target)
 		return false
 
+	var construction_building := turn_manager.get_construction_building_at(target)
 	var job_slot := turn_manager.get_job_slot_at(target)
 	turn_manager.queue_move(unit_id, target)
-	if not job_slot.is_empty() and not turn_manager.plan_job_drop(unit_id, target):
-		turn_manager.cancel_move(unit_id)
-		view.flash_invalid_cell(target)
-		return false
-	if job_slot.is_empty():
+	if construction_building != null:
+		if not turn_manager.plan_construction_drop(unit_id, target):
+			turn_manager.cancel_move(unit_id)
+			view.flash_invalid_cell(target)
+			return false
+	elif not job_slot.is_empty():
+		if not turn_manager.plan_job_drop(unit_id, target):
+			turn_manager.cancel_move(unit_id)
+			view.flash_invalid_cell(target)
+			return false
+	else:
 		turn_manager.plan_job_drop(unit_id, target)
 	_refresh_view()
 	return true
