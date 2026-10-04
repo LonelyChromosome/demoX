@@ -5,6 +5,7 @@ func _init() -> void:
 	_test_farm_staffing()
 	_test_workshop_manager_output()
 	_test_building_and_completion_timing()
+	_test_construction_builders_do_not_become_farm_staff()
 	_test_demolition_produces_before_removal()
 	_test_one_production_per_end_day()
 	print("RESOURCE_PRODUCTION_TEST_OK")
@@ -132,6 +133,23 @@ func _test_building_and_completion_timing() -> void:
 	var workshop_result := workshop_context.manager.end_day()
 	_check(workshop.phase == GameEnums.BuildingPhase.ACTIVE, "Newly completed Workshop did not activate")
 	_check(workshop_result.materials_produced == 1, "Newly completed Workshop did not produce immediately")
+
+
+func _test_construction_builders_do_not_become_farm_staff() -> void:
+	var context := _new_context()
+	var farm := _add_building(
+		context.state, "farm", GameEnums.BuildingType.FARM, GameEnums.BuildingPhase.BUILDING
+	)
+	farm.days_left = 1
+	var builder := _add_unit(context.state, "builder", GameEnums.Rank.ROOK)
+	farm.builder_unit_ids = [builder.id]
+	builder.locked_by_construction = true
+	builder.assigned_building_id = farm.id
+	var result := context.manager.end_day()
+	_check(farm.phase == GameEnums.BuildingPhase.ACTIVE, "Farm did not complete")
+	_check(result.food_produced == 2, "Construction builder was incorrectly counted as Farm staff")
+	_check(farm.worker_unit_ids.is_empty(), "Construction builder leaked into Farm worker list")
+	_check(farm.builder_unit_ids.is_empty(), "Completed construction kept stale builder ids")
 
 
 func _test_demolition_produces_before_removal() -> void:
