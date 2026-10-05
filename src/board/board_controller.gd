@@ -190,6 +190,12 @@ func _normalize_building_drop(target: Vector2i, moving_unit_id: String) -> Vecto
 		building = building_system.building_at_cell(state, target)
 	if building == null:
 		return target
+	if (
+		building.type == GameEnums.BuildingType.INFIRMARY
+		and building.phase == GameEnums.BuildingPhase.ACTIVE
+		and target in medical_system.treatment_slots(building)
+	):
+		return target
 	if _is_active_farm_core(building, target):
 		return target
 	if target != building.core_cell and _is_free_target(target, moving_unit_id):
