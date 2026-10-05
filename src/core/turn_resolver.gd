@@ -17,6 +17,7 @@ enum Phase {
 	RESOLVE_SYSTEMS,
 	FOOD_CONSUMPTION,
 	RESOLVE_EVENTS,
+	RESOLVE_INFORMATION,
 	FINALIZE_DEMOLITION,
 	FINALIZE_DAY,
 	START_NEXT_DAY,
@@ -60,13 +61,13 @@ func resolve(
 	_run_phase(Phase.FOOD_CONSUMPTION, result)
 	if not food_system.resolve_consumption(state, result, building_system):
 		return result
-	_finish_resolution(state, building_system, result)
+	_finish_resolution(state, snapshot, building_system, result)
 	return result
 
 
 func resume_after_ration(
 	state: GameState,
-	_snapshot: PendingOrderSnapshot,
+	snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult,
 	fed_unit_ids: Array[String]
@@ -75,17 +76,20 @@ func resume_after_ration(
 		return result
 	if not food_system.apply_ration(state, result, fed_unit_ids, building_system):
 		return result
-	_finish_resolution(state, building_system, result)
+	_finish_resolution(state, snapshot, building_system, result)
 	return result
 
 
 func _finish_resolution(
 	state: GameState,
+	snapshot: PendingOrderSnapshot,
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
 	_run_phase(Phase.RESOLVE_EVENTS, result)
 	_resolve_events(state, result)
+	_run_phase(Phase.RESOLVE_INFORMATION, result)
+	_capture_inspection(state, snapshot, building_system, result)
 
 	_run_phase(Phase.FINALIZE_DEMOLITION, result)
 	_finalize_demolition(state, building_system, result)
@@ -475,6 +479,64 @@ func _resolve_events(_state: GameState, _result: TurnResolutionResult) -> void:
 
 func _start_next_day(_state: GameState, _result: TurnResolutionResult) -> void:
 	pass
+
+
+func _capture_inspection(
+	state: GameState,
+	snapshot: PendingOrderSnapshot,
+	building_system: BuildingSystem,
+	result: TurnResolutionResult
+) -> void:
+	var order := snapshot.inspect_building_order
+	if order == null:
+		return
+	var king := state.units.get(order.king_unit_id) as UnitState
+	var building := state.buildings.get(order.building_id) as BuildingState
+	if king == null or king.faction != GameEnums.Faction.PLAYER or king.rank != GameEnums.Rank.KING:
+		result.reject("inspection", order.building_id, "Không còn Vua hợp lệ để kiểm tra")
+		return
+	if building == null:
+		result.reject("inspection", order.building_id, "Công trình không còn tồn tại")
+		return
+	for move in snapshot.move_orders:
+		if move.unit_id == king.id:
+			result.reject("inspection", order.building_id, "Vua đã dùng lượt để di chuyển")
+			return
+	if king.board_cell not in building_system.footprint(building.core_cell):
+		result.reject("inspection", order.building_id, "Vua chưa đứng trong khu công trình")
+		return
+	var manager := state.units.get(building.manager_unit_id) as UnitState
+	var staff := {}
+	if manager != null:
+		staff[manager.id] = true
+	for worker_id in building.worker_unit_ids:
+		staff[worker_id] = true
+	result.inspection_snapshots.append({
+		"building_id": building.id,
+		"king_unit_id": king.id,
+		"values": {
+			"type": building.type,
+			"core_cell": building.core_cell,
+			"phase": building.phase,
+			"days_left": building.days_left,
+			"builder_count": building.builder_unit_ids.size(),
+			"manager_name": (
+				manager.display_name if manager != null and not manager.display_name.is_empty()
+				else (manager.id if manager != null else "—")
+			),
+			"staff_count": staff.size(),
+			"daily_output": _inspection_output(state, building),
+		},
+	})
+	result.inspected_building_ids.append(building.id)
+
+
+func _inspection_output(state: GameState, building: BuildingState) -> int:
+	if building.type == GameEnums.BuildingType.FARM:
+		return food_system.production_for_building(state, building)
+	if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
+		return material_system.manager_output(state, building)
+	return 0
 
 
 func _run_phase(phase: Phase, result: TurnResolutionResult) -> void:
