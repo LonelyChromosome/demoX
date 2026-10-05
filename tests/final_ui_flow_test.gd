@@ -46,13 +46,17 @@ func _test_report_breakdown() -> void:
 	result.food_produced = 4
 	result.food_consumed = 2
 	result.materials_produced = 2
+	InformationSystem.new().resolve_daily_information(state, result)
 	var report := ReportPanel.new()
 	root.add_child(report)
-	report.show_result(state, result)
-	_check("Nông trại sản xuất: +4" in report.body_label.text, "Report hid gross Farm production")
-	_check("Khẩu phần: -2" in report.body_label.text, "Report hid food consumption")
-	_check("Thay đổi lương thực: +2" in report.body_label.text, "Report hid net food change")
-	_check("Sản xuất vật tư: +2" in report.body_label.text, "Report hid material production")
+	report.show_result(result)
+	_check("sản xuất +4" in report.body_label.text, "Report hid gross Farm production")
+	_check("khẩu phần -2" in report.body_label.text, "Report hid food consumption")
+	_check("thay đổi +2" in report.body_label.text, "Report hid net food change")
+	_check("Vật tư: sản xuất +2" in report.body_label.text, "Report hid material production")
+	_check("Nguồn: Sổ kho trung tâm" in report.body_label.text, "Report omitted information source")
+	_check("Độ tin cậy: Đã xác nhận" in report.body_label.text, "Report omitted confidence")
+	_check("Cập nhật: Ngày 4" in report.body_label.text, "Report omitted observation day")
 	_check(report.visible, "Daily report did not open automatically")
 	report.close()
 	_check(not report.visible and report.has_report, "Report could not close and reopen safely")
