@@ -29,6 +29,9 @@ var staffing_committed_building_ids: Array[String] = []
 var farm_role_changes: Array[Dictionary] = []
 var building_events: Array[Dictionary] = []
 var starved_unit_names: Dictionary = {}
+var inspection_snapshots: Array[Dictionary] = []
+var inspected_building_ids: Array[String] = []
+var report_entries: Array[ReportEntry] = []
 var rejected_orders: Array[Dictionary] = []
 
 
