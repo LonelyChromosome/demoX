@@ -13,6 +13,7 @@ var _demolish_building_order: DemolishBuildingOrder
 var _staffing_orders: Dictionary = {}
 var _planned_job_slots: Dictionary = {}
 var _planned_builder_cells: Dictionary = {}
+var _inspect_building_order: InspectBuildingOrder
 
 
 func plan_move(
@@ -31,6 +32,26 @@ func cancel_move(unit_id: String) -> void:
 
 func get_move(unit_id: String) -> MoveUnitOrder:
 	return _move_orders.get(unit_id) as MoveUnitOrder
+
+
+func plan_inspection(building_id: String, king_unit_id: String, day: int) -> InspectBuildingOrder:
+	_inspect_building_order = InspectBuildingOrder.new(building_id, king_unit_id, day)
+	changed.emit()
+	return _inspect_building_order
+
+
+func cancel_inspection() -> void:
+	if _inspect_building_order != null:
+		_inspect_building_order = null
+		changed.emit()
+
+
+func get_inspection() -> InspectBuildingOrder:
+	return _inspect_building_order
+
+
+func has_inspection_for_unit(unit_id: String) -> bool:
+	return _inspect_building_order != null and _inspect_building_order.king_unit_id == unit_id
 
 
 func move_targets() -> Dictionary:
@@ -224,6 +245,8 @@ func snapshot() -> PendingOrderSnapshot:
 		result.cancel_construction_order = _cancel_construction_order.copy()
 	if _demolish_building_order != null:
 		result.demolish_building_order = _demolish_building_order.copy()
+	if _inspect_building_order != null:
+		result.inspect_building_order = _inspect_building_order.copy()
 	var staffing_ids := _staffing_orders.keys()
 	staffing_ids.sort()
 	for building_id in staffing_ids:
@@ -244,6 +267,7 @@ func clear() -> void:
 	_building_sequence.clear()
 	_cancel_construction_order = null
 	_demolish_building_order = null
+	_inspect_building_order = null
 	_staffing_orders.clear()
 	_planned_job_slots.clear()
 	_planned_builder_cells.clear()
@@ -259,6 +283,7 @@ func is_empty() -> bool:
 		and _building_orders.is_empty()
 		and _cancel_construction_order == null
 		and _demolish_building_order == null
+		and _inspect_building_order == null
 		and _staffing_orders.is_empty()
 		and _assign_builder_orders.is_empty()
 		and _remove_builder_orders.is_empty()
