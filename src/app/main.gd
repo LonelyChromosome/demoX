@@ -175,7 +175,7 @@ func _on_day_started(_day: int) -> void:
 
 func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	_refresh_header()
-	report_panel.show_result(game_state, result)
+	report_panel.show_result(result)
 	_show_resource_delta(result)
 	if not result.starved_unit_ids.is_empty():
 		var names: Array[String] = []
@@ -218,6 +218,7 @@ func _on_placement_mode_changed(active: bool) -> void:
 
 func _refresh_header() -> void:
 	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
+	# Kho trung tâm là thông tin player quản lý trực tiếp, nên header được phép hiện số chính xác.
 	resource_label.text = "   Lương thực %d   ·   Vật tư %d" % [game_state.food, game_state.materials]
 	board.set_day(game_state.day, game_state.day > 1)
 
