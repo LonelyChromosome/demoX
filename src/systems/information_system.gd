@@ -347,6 +347,35 @@ func _append_medical_prison_events(
 		))
 
 
+func _append_medical_prison_events(
+	result: TurnResolutionResult, entries: Array[ReportEntry]
+) -> void:
+	for event in result.medical_events:
+		var text := "%s đã vào Y xá điều trị." % event.unit_name
+		if event.kind == "recovered":
+			text = "%s đã hồi phục." % event.unit_name
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Y xá"
+		))
+	for event in result.prison_events:
+		var text := "Nhà giam thiếu người canh giữ."
+		if event.kind == "admitted":
+			text = "%s đã được đưa vào Nhà giam." % event.unit_name
+		elif event.kind == "labor":
+			text = "%s đã lao động hỗ trợ xây dựng." % event.unit_name
+		elif event.kind == "released":
+			text = "%s đã được thả." % event.unit_name
+		elif event.kind == "killed":
+			text = "%s đã bị xử lý." % event.unit_name
+		elif event.kind == "submitted":
+			text = "%s đã quy phục và trở thành Tốt." % event.unit_name
+		elif event.kind == "continued":
+			text = "%s tiếp tục bị giam." % event.unit_name
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
+		))
+
+
 func _update_visible_building_facts(
 	state: GameState, result: TurnResolutionResult, updated_keys: Dictionary
 ) -> void:
