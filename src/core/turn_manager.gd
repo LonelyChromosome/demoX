@@ -19,6 +19,7 @@ var expedition_system := ExpeditionSystem.new()
 var event_system := EventSystem.new()
 var promotion_system := resolver.promotion_system
 var relationship_system := resolver.relationship_system
+var loyalty_system := resolver.loyalty_system
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult
@@ -37,7 +38,7 @@ func queue_move(unit_id: String, target: Vector2i) -> MoveUnitOrder:
 	if order_queue.has_inspection_for_unit(unit_id):
 		return null
 	var unit := state.units.get(unit_id) as UnitState
-	if unit == null:
+	if unit == null or not loyalty_system.can_accept_order(unit):
 		return null
 	return order_queue.plan_move(unit_id, unit.board_cell, target, state.day)
 
@@ -84,6 +85,9 @@ func can_plan_inspection(building_id: String) -> bool:
 func queue_wasteland_development(unit_ids: Array[String] = []) -> DevelopWastelandOrder:
 	if not can_edit_orders() or not state.wasteland.can_start():
 		return null
+	for unit_id in unit_ids:
+		if not loyalty_system.can_accept_order(state.units.get(unit_id) as UnitState):
+			return null
 	return order_queue.plan_wasteland_development(state.day, unit_ids)
 
 
@@ -140,6 +144,9 @@ func queue_expedition(
 ) -> DispatchExpeditionOrder:
 	if not can_edit_orders() or not expedition_system.can_dispatch(unit_ids):
 		return null
+	for unit_id in unit_ids:
+		if not loyalty_system.can_accept_order(state.units.get(unit_id) as UnitState):
+			return null
 	return order_queue.plan_expedition(
 		_next_expedition_id(), unit_ids, state.day, target_region_id, supplies_food
 	)
@@ -159,7 +166,105 @@ func queue_promotion(
 ) -> PromoteUnitOrder:
 	if not can_edit_orders() or order_queue.get_promotion(unit_id) != null:
 		return null
+	if not loyalty_system.can_accept_order(state.units.get(unit_id) as UnitState):
+		return null
 	return order_queue.plan_promotion(unit_id, barracks_id, target_rank, state.day)
+
+
+func notable_relationships(unit_id: String) -> Array[RelationshipState]:
+	var notable: Array[RelationshipState] = []
+	if state == null:
+		return notable
+	for candidate in state.relationships.values():
+		if (
+			candidate is RelationshipState
+			and candidate.includes(unit_id)
+			and (
+				candidate.status != RelationshipState.NEUTRAL
+				or candidate.affinity != 0
+				or candidate.trust != 0
+			)
+		):
+			notable.append(candidate)
+	notable.sort_custom(func(a: RelationshipState, b: RelationshipState):
+		return a.last_changed_day > b.last_changed_day
+	)
+	return notable
+
+
+func confirm_romance(first_unit_id: String, second_unit_id: String) -> bool:
+	if not can_edit_orders():
+		return false
+	var key := relationship_system.pair_key(first_unit_id, second_unit_id)
+	if not relationship_system.confirm_romance(
+		state, first_unit_id, second_unit_id, state.day, "romance:confirmed:%s" % key
+	):
+		return false
+	var first := state.units.get(first_unit_id) as UnitState
+	var second := state.units.get(second_unit_id) as UnitState
+	var first_name := _unit_name(first, first_unit_id)
+	var second_name := _unit_name(second, second_unit_id)
+	var memory := "%s và %s đã lựa chọn gắn bó." % [first_name, second_name]
+	for unit in [first, second]:
+		if unit != null:
+			unit.memories.append(memory)
+	state.remember(memory, "relationship_bonded")
+	state.pending_social_events.append({
+		"kind": "romance_bonded",
+		"text": memory,
+		"source": "Relationship",
+		"attention": GameEnums.AttentionLevel.NOTICE,
+		"category": "summary",
+		"fact_key": "relationship:%s" % key,
+	})
+	return true
+
+
+func can_interrogate(unit_id: String) -> bool:
+	if not can_edit_orders():
+		return false
+	var unit := state.units.get(unit_id) as UnitState
+	var king := _player_king()
+	return (
+		loyalty_system.can_interrogate(unit)
+		and not unit.is_prisoner
+		and unit.away_assignment_id.is_empty()
+		and not unit.return_pending
+		and building_system.is_inside_board(unit.board_cell)
+		and unit.last_interrogated_day != state.day
+		and king != null
+		and king.can_manage_city()
+	)
+
+
+func interrogate_unit(unit_id: String) -> bool:
+	if not can_interrogate(unit_id):
+		return false
+	var unit := state.units.get(unit_id) as UnitState
+	var unit_name := _unit_name(unit, unit_id)
+	var level_label := loyalty_system.level_label(unit.rebellion_level)
+	var text := "%s được Vua thẩm vấn: Trung thành %d, mức %s (đã xác nhận)." % [
+		unit_name, unit.loyalty, level_label,
+	]
+	unit.last_interrogated_day = state.day
+	unit.memories.append("Ngày %d: được Vua thẩm vấn; %s." % [state.day, level_label])
+	unit.memory_tags.append({
+		"day": state.day,
+		"source": "king_interrogation",
+		"reason": "rebellion_confirmed",
+		"loyalty": unit.loyalty,
+		"rebellion_level": unit.rebellion_level,
+	})
+	state.remember(text, "interrogation")
+	state.pending_social_events.append({
+		"kind": "interrogation",
+		"text": text,
+		"source": "King interrogation",
+		"attention": loyalty_system.attention_for(unit.rebellion_level),
+		"category": "summary",
+		"fact_key": "interrogation:%d:%s" % [state.day, unit.id],
+	})
+	return true
 
 
 func cancel_promotion(unit_id: String) -> void:
@@ -600,6 +705,8 @@ func submit_ration(fed_unit_ids: Array[String]) -> TurnResolutionResult:
 
 
 func _complete_resolution(result: TurnResolutionResult) -> void:
+	result.social_events.append_array(state.pending_social_events)
+	state.pending_social_events.clear()
 	information_system.resolve_daily_information(state, result)
 	order_queue.clear()
 	_pending_snapshot = null
@@ -718,3 +825,7 @@ func _player_king() -> UnitState:
 		):
 			return candidate
 	return null
+
+
+func _unit_name(unit: UnitState, fallback: String) -> String:
+	return unit.display_name if unit != null and not unit.display_name.is_empty() else fallback

@@ -33,6 +33,8 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 	_append_medical_prison_events(result, entries)
 	_append_outside_events(result, entries)
 	_append_progression_events(state, result, entries)
+	_append_loyalty_events(state, result, entries)
+	_append_social_events(result, entries)
 	_append_world_events(result, entries)
 	_append_perimeter_events(result, entries)
 	_append_event_reports(result, entries)
@@ -400,6 +402,46 @@ func _append_progression_events(
 		entries.append(ReportEntry.new(
 			event.text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED,
 			"Barracks", "promotion:%s" % event.unit_id, attention, "summary"
+		))
+
+
+func _append_loyalty_events(
+	state: GameState, result: TurnResolutionResult, entries: Array[ReportEntry]
+) -> void:
+	for event in result.loyalty_events:
+		var unit := state.units.get(str(event.get("unit_id", ""))) as UnitState
+		var unit_name := (
+			unit.display_name
+			if unit != null and not unit.display_name.is_empty()
+			else str(event.get("unit_id", "Một quân cờ"))
+		)
+		var delta := int(event.get("delta", 0))
+		var text := "%s: Trung thành %s%d." % [
+			unit_name, "+" if delta > 0 else "", delta,
+		]
+		if bool(event.get("level_changed", false)):
+			text += " Mức bất mãn: %s." % str(event.get("level_label", "không rõ"))
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED,
+			str(event.get("source", "Nội bộ")),
+			"loyalty:%s" % str(event.get("unit_id", "")),
+			int(event.get("attention", GameEnums.AttentionLevel.NORMAL)),
+			"summary"
+		))
+
+
+func _append_social_events(
+	result: TurnResolutionResult, entries: Array[ReportEntry]
+) -> void:
+	for event in result.social_events:
+		entries.append(ReportEntry.new(
+			str(event.get("text", "Sự kiện xã hội đã được ghi nhận.")),
+			result.resolved_day,
+			GameEnums.FactConfidence.CONFIRMED,
+			str(event.get("source", "Nội bộ")),
+			str(event.get("fact_key", "")),
+			int(event.get("attention", GameEnums.AttentionLevel.NORMAL)),
+			str(event.get("category", "summary"))
 		))
 
 

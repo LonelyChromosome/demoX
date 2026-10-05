@@ -29,6 +29,7 @@ var perimeter_layout := PerimeterLayout.new()
 var wasteland := WastelandState.new()
 var last_inspection_day := 0
 var relationships: Dictionary = {}
+var pending_social_events: Array[Dictionary] = []
 
 var day_one_full_knowledge := true
 var active_event_id := ""

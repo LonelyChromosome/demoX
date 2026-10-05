@@ -9,6 +9,7 @@ const WORKSHOP_OUTPUT := {
 	GameEnums.Rank.QUEEN: 3,
 	GameEnums.Rank.KING: 0,
 }
+var loyalty_system := LoyaltySystem.new()
 
 
 func manager_output(state: GameState, building: BuildingState) -> int:
@@ -19,7 +20,10 @@ func manager_output(state: GameState, building: BuildingState) -> int:
 	var manager := state.units.get(building.manager_unit_id) as UnitState
 	if manager == null or manager.faction != GameEnums.Faction.PLAYER:
 		return 0
-	return WORKSHOP_OUTPUT.get(manager.rank, 0)
+	return int(floor(
+		float(WORKSHOP_OUTPUT.get(manager.rank, 0))
+		* loyalty_system.work_output_multiplier(manager)
+	))
 
 
 func produce(state: GameState, result: TurnResolutionResult) -> void:

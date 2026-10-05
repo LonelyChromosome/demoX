@@ -11,6 +11,9 @@ var board_cell := Vector2i(-1, -1)
 
 var loyalty := 0
 var rebellion_level: GameEnums.RebellionLevel = GameEnums.RebellionLevel.NONE
+var loyalty_history: Array[Dictionary] = []
+var loyalty_source_keys: Dictionary = {}
+var last_interrogated_day := 0
 var injured := false
 var healing_days_left := 0
 var hunger_streak := 0
@@ -73,6 +76,7 @@ func can_be_moved() -> bool:
 		and away_assignment_id.is_empty()
 		and not return_pending
 		and not is_in_promotion_training()
+		and rebellion_level < GameEnums.RebellionLevel.RESISTS
 	)
 
 
@@ -85,6 +89,7 @@ func can_manage_city() -> bool:
 		and away_assignment_id.is_empty()
 		and not return_pending
 		and not is_in_promotion_training()
+		and rebellion_level < GameEnums.RebellionLevel.RESISTS
 	)
 
 func can_be_builder() -> bool:
@@ -99,4 +104,5 @@ func can_be_builder() -> bool:
 		and away_assignment_id.is_empty()
 		and not return_pending
 		and not is_in_promotion_training()
+		and rebellion_level < GameEnums.RebellionLevel.RESISTS
 	)

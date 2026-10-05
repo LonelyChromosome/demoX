@@ -64,6 +64,21 @@ func open_for_cell(cell: Vector2i) -> void:
 			unit_actions["cancel_move"] = "Hủy nước đi"
 		if turn_manager.has_planned_inspection_for_unit(unit.id):
 			unit_actions["cancel_inspection"] = "Hủy kiểm tra trực tiếp"
+		if turn_manager.can_interrogate(unit.id):
+			unit_actions["interrogate:%s" % unit.id] = "THẨM VẤN"
+		for relationship in turn_manager.notable_relationships(unit.id):
+			if relationship.status != RelationshipState.ROMANCE_CANDIDATE:
+				continue
+			var other_id := relationship.other_unit_id(unit.id)
+			var other := state.units.get(other_id) as UnitState
+			var other_name := (
+				other.display_name
+				if other != null and not other.display_name.is_empty()
+				else other_id
+			)
+			unit_actions["romance:%s:%s" % [unit.id, other_id]] = (
+				"GẮN BÓ với %s" % other_name
+			)
 		popup.open_at(
 			board.cell_screen_position(cell),
 			unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank),
@@ -226,6 +241,12 @@ func _on_action_confirmed(action: String) -> void:
 	elif action.begins_with("cancel_promotion:"):
 		turn_manager.cancel_promotion(action.get_slice(":", 1))
 		call_deferred("_reopen_current")
+	elif action.begins_with("romance:"):
+		turn_manager.confirm_romance(action.get_slice(":", 1), action.get_slice(":", 2))
+		call_deferred("_reopen_current")
+	elif action.begins_with("interrogate:"):
+		turn_manager.interrogate_unit(action.get_slice(":", 1))
+		call_deferred("_reopen_current")
 	elif action == "clear_slot":
 		var building := _building_at(current_cell)
 		if building != null:
@@ -292,13 +313,14 @@ func _unit_detail(unit: UnitState) -> String:
 	if inspection != null and inspection.king_unit_id == unit.id:
 		planned_text += "\nDự kiến: kiểm tra trực tiếp công trình vào cuối ngày"
 	var progression := _unit_progression_detail(unit)
+	var social := _unit_social_detail(unit)
 	var story_lines: Array[String] = unit.backstory.duplicate()
 	var first_memory := maxi(0, unit.memories.size() - 4)
 	for index in range(first_memory, unit.memories.size()):
 		story_lines.append(unit.memories[index])
 	var story := "Chưa có dữ kiện." if story_lines.is_empty() else "\n".join(story_lines)
 	var template := (
-		"Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n%s"
+		"Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n%s\n%s"
 		+ "\n\nQUÁ KHỨ & KÝ ỨC\n%s"
 	)
 	return template % [
@@ -307,9 +329,56 @@ func _unit_detail(unit: UnitState) -> String:
 		_cell_name(unit.board_cell),
 		planned_text,
 		progression,
+		social,
 		turn_manager.information_system.unit_condition_detail(state, unit),
 		story,
 	]
+
+
+func _unit_social_detail(unit: UnitState) -> String:
+	var level := turn_manager.loyalty_system.level_label(unit.rebellion_level)
+	var lines: Array[String] = [
+		"TRUNG THÀNH · %d · %s" % [unit.loyalty, level],
+	]
+	if unit.rebellion_level == GameEnums.RebellionLevel.LOW_OUTPUT:
+		lines.append("Hiệu suất công việc hiện giảm.")
+	elif unit.rebellion_level == GameEnums.RebellionLevel.OBJECTS_BUT_OBEYS:
+		lines.append("Phản đối nhưng vẫn thi hành; hiệu suất giảm.")
+	elif unit.rebellion_level == GameEnums.RebellionLevel.RESISTS:
+		lines.append("Đang kháng lệnh: không nhận mệnh lệnh mới.")
+	elif unit.rebellion_level == GameEnums.RebellionLevel.REVOLT:
+		lines.append("NỔI LOẠN: mất quyền điều khiển và ngừng làm việc.")
+	var relationships := turn_manager.notable_relationships(unit.id)
+	if relationships.is_empty():
+		lines.append("QUAN HỆ · chưa có quan hệ đáng chú ý")
+		return "\n".join(lines)
+	lines.append("QUAN HỆ")
+	for index in range(mini(3, relationships.size())):
+		var relationship: RelationshipState = relationships[index]
+		var other_id := relationship.other_unit_id(unit.id)
+		var other := state.units.get(other_id) as UnitState
+		var other_name := (
+			other.display_name
+			if other != null and not other.display_name.is_empty()
+			else other_id
+		)
+		lines.append("%s · Thiện cảm %d · Tin cậy %d · %s" % [
+			other_name,
+			relationship.affinity,
+			relationship.trust,
+			_relationship_status_name(relationship.status),
+		])
+	return "\n".join(lines)
+
+
+func _relationship_status_name(status: String) -> String:
+	return {
+		RelationshipState.NEUTRAL: "Bình thường",
+		RelationshipState.FAMILIAR: "Quen thuộc",
+		RelationshipState.CLOSE: "Thân thiết",
+		RelationshipState.ROMANCE_CANDIDATE: "Có thể gắn bó",
+		RelationshipState.BONDED: "Đã gắn bó",
+	}.get(status, status)
 
 
 func _unit_progression_detail(unit: UnitState) -> String:

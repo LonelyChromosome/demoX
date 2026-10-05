@@ -14,6 +14,7 @@ var world_system := WorldSystem.new()
 var event_system := EventSystem.new()
 var promotion_system := PromotionSystem.new()
 var relationship_system := RelationshipSystem.new()
+var loyalty_system := LoyaltySystem.new()
 var perimeter_system := PerimeterSystem.new()
 var ruin_system := RuinSystem.new()
 
@@ -60,6 +61,13 @@ func resolve(
 	var blocked_unit_ids := _blocked_unit_ids(snapshot)
 	var valid_promotions: Array[Dictionary] = []
 	for promotion_order in snapshot.promotion_orders:
+		var promotion_unit := state.units.get(promotion_order.unit_id) as UnitState
+		if not loyalty_system.can_accept_order(promotion_unit):
+			result.reject(
+				"promotion", promotion_order.unit_id,
+				"Quân đang kháng lệnh và từ chối huấn luyện mới"
+			)
+			continue
 		var promotion_validation := promotion_system.validate_order(
 			state, promotion_order, blocked_unit_ids
 		)
@@ -156,6 +164,7 @@ func _finish_resolution(
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
+	_apply_loyalty_outcomes(state, result)
 	var skip_groups := {}
 	for group_id in result.new_outsider_group_ids:
 		skip_groups[group_id] = true
@@ -183,6 +192,29 @@ func _finish_resolution(
 	_start_next_day(state, result)
 
 
+func _apply_loyalty_outcomes(
+	state: GameState, result: TurnResolutionResult
+) -> void:
+	for unit_id in result.unfed_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		loyalty_system.adjust_loyalty(
+			state, unit.id, -1, state.day,
+			"Phân phối khẩu phần", "không được cấp lương thực",
+			"loyalty:hunger:%d:%s" % [state.day, unit.id], result
+		)
+	for unit_id in result.promoted_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		loyalty_system.adjust_loyalty(
+			state, unit.id, 1, state.day,
+			"Barracks", "được thăng cấp",
+			"loyalty:promotion:%d:%s" % [state.day, unit.id], result
+		)
+
+
 func _validate_moves(
 	state: GameState,
 	orders: Array[MoveUnitOrder],
@@ -198,6 +230,9 @@ func _validate_moves(
 		var unit := state.units.get(order.unit_id) as UnitState
 		if unit == null:
 			result.reject("move", order.unit_id, "Quân cờ không còn tồn tại")
+			continue
+		if not loyalty_system.can_accept_order(unit):
+			result.reject("move", order.unit_id, "Quân cờ kháng lệnh và từ chối nước đi mới")
 			continue
 		if not unit.can_be_moved():
 			result.reject("move", order.unit_id, "Quân cờ đang bị khóa thao tác")

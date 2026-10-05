@@ -3,6 +3,7 @@ extends RefCounted
 
 const MAX_FARM_STAFF := 6
 var building_system := BuildingSystem.new()
+var loyalty_system := LoyaltySystem.new()
 
 
 func operational_cells(core_cell: Vector2i) -> Array[Vector2i]:
@@ -402,6 +403,8 @@ func _validate_unit(
 		return {"valid": false, "reason": "Quân cờ không tồn tại"}
 	if unit.faction != GameEnums.Faction.PLAYER:
 		return {"valid": false, "reason": "Chỉ quân phe ta mới được phân công"}
+	if not loyalty_system.can_accept_order(unit):
+		return {"valid": false, "reason": "Quân đang kháng lệnh và từ chối công việc mới"}
 	if manager and unit.rank == GameEnums.Rank.KING:
 		return {"valid": false, "reason": "Vua không được làm quản lý"}
 	if unit.locked_by_construction:

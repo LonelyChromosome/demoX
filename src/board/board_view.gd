@@ -138,7 +138,7 @@ func day_color_progress(day: int) -> float:
 
 func begin_hold(unit_id: String) -> void:
 	held_unit_id = unit_id
-	held_mouse_position = get_local_mouse_position()
+	held_mouse_position = _board_geometry().projection.screen_to_plane(get_local_mouse_position())
 	held_lift_progress = 0.0
 	create_tween().tween_method(_set_held_lift, 0.0, 1.0, 0.11)
 	queue_redraw()
@@ -175,12 +175,16 @@ func present_job_slots(current_slots: Dictionary) -> void:
 
 func cell_screen_position(cell: Vector2i) -> Vector2:
 	var geometry := _board_geometry()
-	return global_position + geometry.origin + Vector2(cell) * geometry.tile + Vector2(geometry.tile * 0.5, geometry.tile * 0.5)
+	return global_position + geometry.projection.cell_center(cell)
+
+
+func gate_local_position() -> Vector2:
+	return _board_geometry().projection.gate_position()
 
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		held_mouse_position = event.position
+		held_mouse_position = _board_geometry().projection.screen_to_plane(event.position)
 		if not held_unit_id.is_empty():
 			queue_redraw()
 		var hover_cell := screen_to_cell(event.position)
@@ -261,11 +265,10 @@ func _process(delta: float) -> void:
 func screen_to_cell(local_pos: Vector2) -> Vector2i:
 	var geometry := _board_geometry()
 	var tile: float = geometry.tile
-	var origin: Vector2 = geometry.origin
 	if tile <= 0.0:
 		return Vector2i(-1, -1)
-	var p := local_pos - origin
-	return Vector2i(floori(p.x / tile), floori(p.y / tile))
+	var grid_position: Vector2 = geometry.projection.screen_to_grid(local_pos)
+	return Vector2i(floori(grid_position.x), floori(grid_position.y))
 
 
 func is_inside(cell: Vector2i) -> bool:
@@ -273,13 +276,13 @@ func is_inside(cell: Vector2i) -> bool:
 
 
 func _board_geometry() -> Dictionary:
-	var available := Vector2(maxf(size.x - 92.0, 0.0), maxf(size.y - 92.0, 0.0))
-	var tile := floorf(minf(available.x, available.y) / float(BOARD_SIZE))
-	var board_px := tile * BOARD_SIZE
-	var origin := Vector2(
-		floorf((size.x - board_px) * 0.5), floorf((size.y - board_px) * 0.5 + 10.0)
-	)
-	return {"tile": tile, "board_px": board_px, "origin": origin}
+	var projection := BoardProjection.fit(size, BOARD_SIZE)
+	return {
+		"tile": projection.tile,
+		"board_px": projection.board_px,
+		"origin": Vector2.ZERO,
+		"projection": projection,
+	}
 
 
 func _draw() -> void:
@@ -287,9 +290,12 @@ func _draw() -> void:
 	var tile: float = geometry.tile
 	var board_px: float = geometry.board_px
 	var origin: Vector2 = geometry.origin
+	var projection: BoardProjection = geometry.projection
 	if tile <= 0.0:
 		return
 
+	_draw_city_foundation(projection)
+	draw_set_transform_matrix(projection.transform)
 	var border_color := _progress_color(BORDER, 0.55)
 	draw_rect(Rect2(origin - Vector2(22, 22), Vector2(board_px + 44, board_px + 44)), border_color)
 	draw_rect(
@@ -320,6 +326,38 @@ func _draw() -> void:
 	_draw_building_effects(origin, tile)
 	_draw_coordinates(origin, tile, board_px)
 	_draw_units(origin, tile)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+	_draw_city_walls(projection)
+
+
+func _draw_city_foundation(projection: BoardProjection) -> void:
+	var top := projection.board_polygon(24.0)
+	var depth := Vector2(0.0, 15.0)
+	var front := PackedVector2Array([top[3], top[2], top[2] + depth, top[3] + depth])
+	var side := PackedVector2Array([top[1], top[2], top[2] + depth, top[1] + depth])
+	draw_colored_polygon(front, Color(0.12, 0.13, 0.12, 0.92))
+	draw_colored_polygon(side, Color(0.09, 0.10, 0.10, 0.90))
+	draw_colored_polygon(top, _progress_color(Color("292e2a"), 0.35))
+
+
+func _draw_city_walls(projection: BoardProjection) -> void:
+	var wall := projection.board_polygon(19.0)
+	var wall_color := _progress_color(Color("82765d"), 0.42)
+	for edge in range(4):
+		if edge == 2:
+			continue
+		draw_line(wall[edge], wall[(edge + 1) % 4], wall_color, 7.0, true)
+	var front_start: Vector2 = wall[3]
+	var front_end: Vector2 = wall[2]
+	var gate_center := (front_start + front_end) * 0.5
+	var direction := (front_end - front_start).normalized()
+	draw_line(front_start, gate_center - direction * 28.0, wall_color, 8.0, true)
+	draw_line(gate_center + direction * 28.0, front_end, wall_color, 8.0, true)
+	for corner in wall:
+		draw_circle(corner, 8.0, wall_color)
+	for tower in [gate_center - direction * 31.0, gate_center + direction * 31.0]:
+		draw_rect(Rect2(tower - Vector2(7.0, 9.0), Vector2(14.0, 18.0)), wall_color)
+	draw_line(gate_center - direction * 24.0, gate_center + direction * 24.0, Color("d0b773"), 3.0, true)
 
 
 func _draw_job_slots(origin: Vector2, tile: float) -> void:

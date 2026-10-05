@@ -5,6 +5,7 @@ const STARVATION_DAYS := 3
 const FARM_BASE_OUTPUT := 2
 const FARM_OUTPUT_PER_WORKER := 2
 const FARM_MAX_WORKERS := 6
+var loyalty_system := LoyaltySystem.new()
 
 func farm_output(worker_count: int) -> int:
 	return FARM_BASE_OUTPUT + mini(worker_count, FARM_MAX_WORKERS) * FARM_OUTPUT_PER_WORKER
@@ -23,12 +24,33 @@ func farm_staff_count(state: GameState, building: BuildingState) -> int:
 	return mini(assigned.size(), FARM_MAX_WORKERS)
 
 
+func farm_staff_effort(state: GameState, building: BuildingState) -> float:
+	var assigned := {}
+	if not building.manager_unit_id.is_empty():
+		assigned[building.manager_unit_id] = true
+	for worker_id in building.worker_unit_ids:
+		assigned[worker_id] = true
+	var effort := 0.0
+	var counted := 0
+	for unit_id in assigned:
+		if counted >= FARM_MAX_WORKERS:
+			break
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		effort += loyalty_system.work_output_multiplier(unit)
+		counted += 1
+	return effort
+
+
 func production_for_building(state: GameState, building: BuildingState) -> int:
 	if building.phase not in [GameEnums.BuildingPhase.ACTIVE, GameEnums.BuildingPhase.DEMOLISHING]:
 		return 0
 	if building.type != GameEnums.BuildingType.FARM:
 		return 0
-	var base_output := farm_output(farm_staff_count(state, building))
+	var base_output := FARM_BASE_OUTPUT + int(floor(
+		farm_staff_effort(state, building) * FARM_OUTPUT_PER_WORKER
+	))
 	var season_modifier := WorldSystem.new().food_production_multiplier(state.world_state)
 	return maxi(1, int(floor(float(base_output) * season_modifier)))
 

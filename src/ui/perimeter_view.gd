@@ -242,6 +242,7 @@ func _layout_board() -> void:
 
 func _draw() -> void:
 	_draw_city_frame()
+	_draw_routes()
 	for zone_id in ZONE_IDS:
 		_draw_zone(zone_id, snapshot.get(zone_id, {}))
 
@@ -252,9 +253,41 @@ func _draw_city_frame() -> void:
 	draw_rect(center, Color(0.58, 0.49, 0.31, 0.42), false, 1.5)
 	var font := get_theme_default_font()
 	draw_string(
-		font, Vector2(center.get_center().x - 46.0, 73.0), "CỔNG THÀNH",
+		font, Vector2(center.get_center().x - 42.0, 73.0), "NỘI THÀNH",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.77, 0.72, 0.58, 0.62)
 	)
+
+
+func route_segments() -> Array[Dictionary]:
+	var routes: Array[Dictionary] = []
+	if board == null:
+		return routes
+	var gate := board.position + board.gate_local_position()
+	for zone_id in ZONE_IDS:
+		var rect := zone_rect_for(zone_id)
+		var destination := rect.get_center()
+		if absf(destination.x - gate.x) > absf(destination.y - gate.y):
+			destination.x = rect.end.x if destination.x < gate.x else rect.position.x
+		else:
+			destination.y = rect.end.y if destination.y < gate.y else rect.position.y
+		routes.append({
+			"zone_id": zone_id,
+			"from_anchor": layout.anchor_for("gate"),
+			"to_anchor": layout.anchor_for(zone_id),
+			"from": gate,
+			"to": destination,
+		})
+	return routes
+
+
+func _draw_routes() -> void:
+	for route in route_segments():
+		var start: Vector2 = route.from
+		var finish: Vector2 = route.to
+		var bend := Vector2(start.x, finish.y) if absf(finish.y - start.y) < 80.0 else Vector2(finish.x, start.y)
+		var path := PackedVector2Array([start, start.lerp(bend, 0.55), bend, finish])
+		draw_polyline(path, Color(0.43, 0.37, 0.28, 0.50), 9.0, true)
+		draw_polyline(path, Color(0.72, 0.63, 0.45, 0.36), 2.0, true)
 
 
 func _draw_zone(zone_id: String, zone: Dictionary) -> void:
