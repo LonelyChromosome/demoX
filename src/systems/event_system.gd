@@ -13,7 +13,11 @@ func _init() -> void:
 
 func register_definition(definition: Dictionary) -> bool:
 	var definition_id := str(definition.get("id", ""))
-	if definition_id.is_empty() or not definition.has("stages"):
+	if (
+		definition_id.is_empty()
+		or not definition.has("stages")
+		or not (definition.get("stages") is Array)
+	):
 		return false
 	definitions[definition_id] = definition.duplicate(true)
 	return true
@@ -47,7 +51,7 @@ func create_event(state: GameState, definition_id: String, source := "", target_
 	event.title = str(definition.get("title", "Sự kiện"))
 	event.description = str(definition.get("description", ""))
 	event.start_day = state.day
-	event.duration = maxi(1, int(definition.get("duration", 1)))
+	event.duration = maxi(1, int(definition.get("duration", _definition_duration(definition))))
 	event.source = source if not source.is_empty() else str(definition.get("source", "World event"))
 	event.target_id = target_id
 	event.tags.assign(definition.get("tags", []))
@@ -71,6 +75,9 @@ func choose_event(state: GameState, event_id: String, choice_id: String) -> bool
 			event.chosen_choice = choice_id
 			event.status = GameEnums.EventStatus.ACTIVE
 			event.remember("choice", state.day, {"choice_id": choice_id})
+			event.attention_level = mini(event.attention_level, GameEnums.AttentionLevel.NOTICE)
+			if state.active_event_id == event.id:
+				state.active_event_id = ""
 			return true
 	return false
 
@@ -83,19 +90,35 @@ func advance(state: GameState, result: TurnResolutionResult) -> void:
 		var event := state.events.get(event_id) as EventState
 		if event == null or event.resolved:
 			continue
+		if event.start_day >= state.day or event.last_advanced_day >= state.day:
+			continue
 		var definition: Dictionary = definitions.get(event.definition_id, {})
 		if definition.is_empty():
 			continue
 		if event.status == GameEnums.EventStatus.WAITING_CHOICE and event.chosen_choice.is_empty():
 			_append_report(result, event, "%s đang chờ quyết định của Vua." % event.title)
+			event.last_advanced_day = state.day
 			continue
 		var stages: Array = definition.get("stages", [])
 		if event.stage < stages.size():
-			_apply_effects(state, event, stages[event.stage].get("effects", []), result)
-			event.remember("stage", state.day, {"stage": event.stage})
+			var current_stage: Dictionary = stages[event.stage]
+			_apply_effect_list(
+				state, event, current_stage.get("effects", []), result,
+				"stage:%d" % event.stage
+			)
+			_apply_choice_effects(state, event, result)
+			if event.stage_elapsed_days == 0:
+				event.remember("stage", state.day, {"stage": event.stage})
+			event.stage_elapsed_days += 1
+			var stage_duration := maxi(1, int(current_stage.get("duration", 1)))
+			if event.stage_elapsed_days >= stage_duration:
+				event.stage += 1
+				event.stage_elapsed_days = 0
+		else:
+			_apply_choice_effects(state, event, result)
 		event.elapsed_days += 1
-		event.stage += 1
-		if event.elapsed_days >= event.duration or event.stage >= stages.size():
+		event.last_advanced_day = state.day
+		if event.elapsed_days >= event.duration:
 			_resolve_event(state, event, definition, result)
 
 
@@ -125,19 +148,35 @@ func _spawn_triggered_events(state: GameState, result: TurnResolutionResult) -> 
 			_append_report(result, event, event.description)
 
 
-func _apply_effects(state: GameState, event: EventState, effects: Array, result: TurnResolutionResult) -> void:
-	for effect in effects:
+func _apply_effect_list(
+	state: GameState,
+	event: EventState,
+	effects: Array,
+	result: TurnResolutionResult,
+	prefix: String
+) -> void:
+	for effect_index in range(effects.size()):
+		var effect: Dictionary = effects[effect_index]
+		var effect_key := "%s:%d" % [prefix, effect_index]
+		if event.has_applied_effect(effect_key):
+			continue
 		var handler_id := str(effect.get("handler", ""))
 		var handler := effect_handlers.get(handler_id) as Callable
 		if handler.is_valid():
 			handler.call(state, event, effect, result)
+			event.mark_effect_applied(effect_key)
+
+
+func _apply_choice_effects(
+	state: GameState, event: EventState, result: TurnResolutionResult
+) -> void:
 	for choice in event.choices:
 		if str(choice.get("id", "")) != event.chosen_choice:
 			continue
-		for effect in choice.get("effects", []):
-			var handler := effect_handlers.get(str(effect.get("handler", ""))) as Callable
-			if handler.is_valid():
-				handler.call(state, event, effect, result)
+		_apply_effect_list(
+			state, event, choice.get("effects", []), result,
+			"choice:%s" % event.chosen_choice
+		)
 
 
 func _resolve_event(state: GameState, event: EventState, definition: Dictionary, result: TurnResolutionResult) -> void:
@@ -172,6 +211,13 @@ func _has_definition_active(state: GameState, definition_id: String) -> bool:
 	return false
 
 
+func _definition_duration(definition: Dictionary) -> int:
+	var total := 0
+	for stage_definition in definition.get("stages", []):
+		total += maxi(1, int(stage_definition.get("duration", 1)))
+	return maxi(1, total)
+
+
 func _register_core_handlers() -> void:
 	register_condition_handler("always", func(_state, _definition): return true)
 	register_condition_handler("never", func(_state, _definition): return false)
@@ -190,11 +236,30 @@ func _register_default_definitions() -> void:
 		"description": "Một nhóm nạn dân vẫn chờ bên ngoài thành.", "duration": 3,
 		"condition": "outsider_present", "source": "Refugee camp",
 		"attention_level": GameEnums.AttentionLevel.IMPORTANT, "tags": ["refugee", "multi_day"],
+		"choices": [
+			{"id": "support", "label": "Tiếp tục hỗ trợ", "effects": [
+				{"handler": "outsider_pressure", "amount": -1},
+				{"handler": "remember", "kind": "refugee_supported"},
+			]},
+			{"id": "wait", "label": "Để họ tiếp tục chờ", "effects": [
+				{"handler": "outsider_pressure", "amount": 1},
+				{"handler": "remember", "kind": "refugee_pressure"},
+			]},
+		],
 		"stages": [
 			{"effects": [{"handler": "report", "text": "Các quân Tốt ngoài cổng đã dựng chỗ trú tạm."}]},
 			{"effects": [{"handler": "report", "text": "Lương thực và sự chờ đợi đang đè lên khu nạn dân."}]},
 			{"effects": [{"handler": "report", "text": "Nhóm nạn dân cần một quyết định lâu dài."}]},
-		], "resolution_text": "Khu nạn dân đã bước sang một trạng thái mới."
+		], "follow_up_event_ids": ["refugee_aftercare"],
+		"resolution_text": "Khu nạn dân đã bước sang một trạng thái mới."
+	})
+	register_definition({
+		"id": "refugee_aftercare", "type": "refugee", "title": "Tin từ khu nạn dân",
+		"description": "Quyết định trước đó đang để lại hệ quả.", "duration": 1,
+		"condition": "never", "source": "Refugee camp",
+		"attention_level": GameEnums.AttentionLevel.NOTICE, "tags": ["refugee", "follow_up"],
+		"stages": [{"effects": [{"handler": "report", "text": "Khu nạn dân đã phản hồi quyết định của thành."}]}],
+		"resolution_text": "Tin tiếp nối từ khu nạn dân đã được ghi nhận."
 	})
 	register_definition({
 		"id": "forest_signs", "type": "forest", "title": "Dấu hiệu trong rừng",
@@ -218,7 +283,25 @@ func _register_default_definitions() -> void:
 		"stages": [
 			{"effects": [{"handler": "report", "text": "Những ô đất đầu tiên đã được dọn sạch."}]},
 			{"effects": [{"handler": "report", "text": "Đường vào khu khai phá đã thành hình."}]},
-		], "resolution_text": "Đợt công việc tại Đất hoang đã được ghi nhận."
+		], "follow_up_event_ids": ["wasteland_incident"],
+		"resolution_text": "Đợt công việc tại Đất hoang đã được ghi nhận."
+	})
+	register_definition({
+		"id": "wasteland_incident", "type": "wasteland", "title": "Trở ngại ở Đất hoang",
+		"description": "Đội khai phá gặp một đoạn nền đất không ổn định.", "duration": 2,
+		"condition": "never", "source": "Wasteland",
+		"attention_level": GameEnums.AttentionLevel.NOTICE, "tags": ["wasteland", "incident"],
+		"choices": [
+			{"id": "reinforce", "label": "Gia cố lối đi", "effects": [{"handler": "remember", "kind": "wasteland_reinforced"}]},
+			{"id": "reroute", "label": "Đi đường vòng", "effects": [
+				{"handler": "wasteland_delay", "days": 1},
+				{"handler": "remember", "kind": "wasteland_rerouted"},
+			]},
+		],
+		"stages": [
+			{"effects": [{"handler": "report", "text": "Đội khai phá đang đánh giá đoạn đất yếu."}]},
+			{"effects": [{"handler": "report", "text": "Lối làm việc mới đã được ổn định."}]},
+		], "resolution_text": "Trở ngại tại Đất hoang đã được xử lý."
 	})
 
 

@@ -297,7 +297,7 @@ func _append_visible_events(result: TurnResolutionResult, entries: Array[ReportE
 			action = "đã hủy xây"
 		entries.append(ReportEntry.new(
 			"%s %s." % [label, action], result.resolved_day,
-			GameEnums.FactConfidence.CONFIRMED, "Quan sát trực tiếp"
+			GameEnums.FactConfidence.CONFIRMED, "Building"
 		))
 	for unit_id in result.starved_unit_ids:
 		observed.facts.erase(unit_fact_key(unit_id))
@@ -360,12 +360,12 @@ func _append_outside_events(result: TurnResolutionResult, entries: Array[ReportE
 	for event in result.expedition_events:
 		entries.append(ReportEntry.new(
 			event.text, result.resolved_day,
-			GameEnums.FactConfidence.CONFIRMED, "Ngoài thành"
+			GameEnums.FactConfidence.CONFIRMED, "Expedition"
 		))
 	for event in result.outsider_events:
 		entries.append(ReportEntry.new(
 			event.text, result.resolved_day,
-			GameEnums.FactConfidence.CONFIRMED, "Ngoài thành"
+			GameEnums.FactConfidence.CONFIRMED, "Refugee camp"
 		))
 
 
@@ -373,7 +373,7 @@ func _append_world_events(result: TurnResolutionResult, entries: Array[ReportEnt
 	for event_text in result.world_events:
 		entries.append(ReportEntry.new(
 			event_text, result.resolved_day,
-			GameEnums.FactConfidence.REPORTED, "Tin ngoài thành"
+			GameEnums.FactConfidence.REPORTED, "World event"
 		))
 
 
@@ -384,7 +384,7 @@ func _append_perimeter_events(result: TurnResolutionResult, entries: Array[Repor
 			attention = GameEnums.AttentionLevel.IMPORTANT
 		entries.append(ReportEntry.new(
 			event.text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED,
-			"Ngoại vi", "", attention, "summary"
+			"Wasteland", "", attention, "summary"
 		))
 
 

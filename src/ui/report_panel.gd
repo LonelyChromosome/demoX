@@ -4,6 +4,9 @@ extends PanelContainer
 var title_label: Label
 var body_label: Label
 var has_report := false
+var current_entries: Array[ReportEntry] = []
+var full_log_entries: Array[ReportEntry] = []
+var current_day := 1
 
 
 func _ready() -> void:
@@ -45,19 +48,20 @@ func _ready() -> void:
 
 func show_result(result: TurnResolutionResult) -> void:
 	has_report = true
+	current_day = result.next_day
 	title_label.text = "BÁO CÁO NGÀY %02d" % result.resolved_day
-	var lines: Array[String] = []
+	current_entries.clear()
 	for entry in result.report_entries:
-		lines.append(_entry_text(entry, result.next_day))
-	if lines.is_empty():
-		lines.append("Chưa nhận được báo cáo cho ngày này.")
-	body_label.text = "\n\n".join(lines)
+		current_entries.append(entry)
+		full_log_entries.append(entry)
+	_render_sections()
 	open_latest()
 
 
 func open_latest() -> void:
 	if not has_report:
 		return
+	_render_sections()
 	visible = true
 	modulate.a = 0.0
 	scale = Vector2(0.97, 0.97)
@@ -68,7 +72,35 @@ func open_latest() -> void:
 
 
 func close() -> void:
+	for entry in current_entries:
+		entry.read = true
+	_render_sections()
 	visible = false
+
+
+func _render_sections() -> void:
+	if body_label == null:
+		return
+	var attention: Array[ReportEntry] = []
+	for entry in current_entries:
+		if not entry.read and entry.attention_level >= GameEnums.AttentionLevel.IMPORTANT:
+			attention.append(entry)
+	attention.sort_custom(func(a: ReportEntry, b: ReportEntry): return a.attention_level > b.attention_level)
+	var sections: Array[String] = []
+	sections.append(_section_text("CẦN CHÚ Ý", attention, "Không có mục chưa đọc."))
+	sections.append(_section_text("TODAY SUMMARY", current_entries, "Chưa nhận được báo cáo hôm nay."))
+	sections.append(_section_text("FULL LOG", full_log_entries, "Chưa có lịch sử báo cáo."))
+	body_label.text = "\n\n".join(sections)
+
+
+func _section_text(title: String, entries: Array[ReportEntry], empty_text: String) -> String:
+	var lines: Array[String] = [title]
+	if entries.is_empty():
+		lines.append(empty_text)
+	else:
+		for entry in entries:
+			lines.append(_entry_text(entry, current_day))
+	return "\n\n".join(lines)
 
 
 func _entry_text(entry: ReportEntry, current_day: int) -> String:

@@ -48,6 +48,8 @@ jobs:
             --headless --path . --script res://tests/board_core_test.gd
           "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
             --headless --path . --script res://tests/building_placement_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/s10_event_engine_test.gd
 
       - name: Export Windows x86_64
         shell: bash
