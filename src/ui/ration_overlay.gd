@@ -164,8 +164,16 @@ func _card_style(is_selected: bool, hovered := false) -> StyleBoxFlat:
 
 
 func _unit_name(unit: UnitState) -> String:
-	return unit.display_name if not unit.display_name.is_empty() else unit.id
+	if unit.is_prisoner:
+		return "Tù binh %s" % (
+			unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
+		)
+	return unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
 
 
 func _glyph(rank: int) -> String:
 	return ["♟", "♞", "♜", "♝", "♛", "♚"][rank]
+
+
+func _rank_name(rank: int) -> String:
+	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
