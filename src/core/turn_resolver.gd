@@ -56,6 +56,10 @@ func resolve(
 	_run_phase(Phase.COMMIT_DEMOLITION, result)
 	_commit_demolition(state, valid_demolition, building_system, result)
 
+	_run_phase(Phase.COMMIT_STAFFING, result)
+	var valid_staffing := staffing_system.validate_orders(state, snapshot.staffing_orders, result)
+	staffing_system.commit(state, valid_staffing, result)
+
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
 	_run_phase(Phase.FOOD_CONSUMPTION, result)
@@ -93,10 +97,6 @@ func _finish_resolution(
 
 	_run_phase(Phase.FINALIZE_DEMOLITION, result)
 	_finalize_demolition(state, building_system, result)
-
-	_run_phase(Phase.COMMIT_STAFFING, result)
-	var valid_staffing := staffing_system.validate_orders(state, snapshot.staffing_orders, result)
-	staffing_system.commit(state, valid_staffing, result)
 
 	_run_phase(Phase.FINALIZE_DAY, result)
 	state.day_one_full_knowledge = false
