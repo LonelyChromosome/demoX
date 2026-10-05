@@ -14,6 +14,11 @@ var manager_unit_id := ""
 var worker_unit_ids: Array[String] = []
 var job_slots: Dictionary = {}
 var prisoner_labor := 0
+var prisoner_unit_ids: Array[String] = []
+var patient_unit_ids: Array[String] = []
+var under_guarded := false
+var labor_bonus_applied := false
+var accelerated_by_builders := false
 
 
 func _init(
