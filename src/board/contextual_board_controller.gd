@@ -54,11 +54,16 @@ func open_for_cell(cell: Vector2i) -> void:
 	if unit != null:
 		current_unit_id = unit.id
 		board.present_context_target(unit.id)
+		var unit_actions := {}
+		if turn_manager.has_pending_move(unit.id):
+			unit_actions["cancel_move"] = "Hủy nước đi"
+		if turn_manager.has_planned_inspection_for_unit(unit.id):
+			unit_actions["cancel_inspection"] = "Hủy kiểm tra trực tiếp"
 		popup.open_at(
 			board.cell_screen_position(cell),
 			unit.display_name if not unit.display_name.is_empty() else unit.id,
 			_unit_detail(unit),
-			{"cancel_move": "Hủy nước đi"} if turn_manager.has_pending_move(unit.id) else {}
+			unit_actions
 		)
 		return
 	var building := _building_at(cell)
@@ -78,15 +83,8 @@ func open_for_cell(cell: Vector2i) -> void:
 	else:
 		board.present_context_target("", Vector2i(-1, -1), cell)
 	var actions := {}
-	var detail := "%s · %s · còn %d ngày · %d thợ xây\nQuản lý: %s · Lao động: %d%s" % [
-		_type_name(building.type),
-		_phase_name(building.phase),
-		building.days_left,
-		building.builder_unit_ids.size(),
-		building.manager_unit_id if not building.manager_unit_id.is_empty() else "—",
-		building.worker_unit_ids.size(),
-		_planned_label(building),
-	]
+	var detail := turn_manager.information_system.building_detail(state, building)
+	detail += _planned_label(building)
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
 		detail += "\nKéo trực tiếp quân vào một trong 8 ô vận hành để bắt đầu xây."
 		detail += "\nVị trí: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
@@ -109,6 +107,11 @@ func open_for_cell(cell: Vector2i) -> void:
 		if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
 			actions["workshop_manager_slot"] = "Đặt ô quản lý xưởng"
 			actions["clear_slot"] = "Xóa vị trí công việc"
+	var inspection := turn_manager.get_planned_inspection()
+	if inspection != null and inspection.building_id == building.id:
+		actions["cancel_inspection"] = "Hủy kiểm tra trực tiếp"
+	elif building.phase != GameEnums.BuildingPhase.BLUEPRINT and turn_manager.can_plan_inspection(building.id):
+		actions["inspect_building"] = "Kiểm tra trực tiếp"
 	popup.open_at(board.cell_screen_position(cell), _type_name(building.type), detail, actions)
 
 
@@ -182,6 +185,10 @@ func _on_action_confirmed(action: String) -> void:
 			turn_manager.queue_demolition(building.id)
 	elif action == "cancel_demolition":
 		turn_manager.cancel_demolition()
+	elif action == "inspect_building":
+		turn_manager.queue_building_inspection(current_building_id)
+	elif action == "cancel_inspection":
+		turn_manager.cancel_building_inspection()
 	elif action == "clear_slot":
 		var building := _building_at(current_cell)
 		if building != null:
@@ -240,36 +247,24 @@ func _unit_at(cell: Vector2i) -> UnitState:
 
 
 func _unit_detail(unit: UnitState) -> String:
-	var status: Array[String] = []
-	if unit.away_days_left > 0:
-		status.append("đang vắng mặt")
-	if unit.locked_by_construction:
-		status.append("đang xây")
-	if unit.locked_by_healing:
-		status.append("đang điều trị")
-	if unit.is_manager:
-		status.append("quản lý")
-	elif not unit.work_building_id.is_empty():
-		status.append("lao động")
-	elif not unit.assigned_building_id.is_empty():
-		status.append("thợ xây")
-	if status.is_empty():
-		status.append("nhàn rỗi")
 	var planned := turn_manager.get_planned_move_target(unit.id)
+	var planned_text := ""
 	if planned != Vector2i(-1, -1):
-		status.append("đã định nước đi → %s" % _cell_name(planned))
+		planned_text = "\nĐã định nước đi → %s" % _cell_name(planned)
+	var inspection := turn_manager.get_planned_inspection()
+	if inspection != null and inspection.king_unit_id == unit.id:
+		planned_text += "\nDự kiến: kiểm tra trực tiếp công trình vào cuối ngày"
 	var backstory := "Chưa có dữ kiện."
 	if not unit.backstory.is_empty():
 		backstory = "\n".join(unit.backstory)
 	elif not unit.memories.is_empty():
 		backstory = "\n".join(unit.memories)
-	return "Loại quân: %s · Phe: %s\nVị trí: %s\nTrạng thái: %s\nCông việc: %s\nCông trình: %s\n\nQUÁ KHỨ\n%s" % [
+	return "Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n\nQUÁ KHỨ\n%s" % [
 		_rank_name(unit.rank),
 		_faction_name(unit.faction),
 		_cell_name(unit.board_cell),
-		", ".join(status),
-		"quản lý" if unit.is_manager else ("lao động" if not unit.work_building_id.is_empty() else ("thợ xây" if not unit.assigned_building_id.is_empty() else "—")),
-		unit.work_building_id if not unit.work_building_id.is_empty() else (unit.assigned_building_id if not unit.assigned_building_id.is_empty() else "—"),
+		planned_text,
+		turn_manager.information_system.unit_condition_detail(state, unit),
 		backstory,
 	]
 
@@ -304,14 +299,18 @@ func _on_resolution_animation_finished() -> void:
 
 
 func _planned_label(building: BuildingState) -> String:
+	var plans: Array[String] = []
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		return " · DỰ KIẾN"
+		plans.append("đặt bản thiết kế")
 	var demolition := turn_manager.get_planned_demolition()
 	if demolition != null and demolition.building_id == building.id:
-		return " · ĐÃ RA LỆNH PHÁ"
+		plans.append("phá công trình")
 	if turn_manager.get_planned_staffing(building.id) != null:
-		return " · ĐÃ XẾP VIỆC"
-	return ""
+		plans.append("đổi phân công")
+	var inspection := turn_manager.get_planned_inspection()
+	if inspection != null and inspection.building_id == building.id:
+		plans.append("Vua kiểm tra trực tiếp vào cuối ngày")
+	return "\nDỰ KIẾN: %s" % ", ".join(plans) if not plans.is_empty() else ""
 
 
 func _on_popup_closed() -> void:
