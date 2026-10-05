@@ -374,7 +374,8 @@ func _duration_for(run_seed: int, expedition_id: String, day: int) -> int:
 
 func _stable_seed(run_seed: int, id: String, day: int, salt: String) -> int:
 	var text := "%d|%s|%d|%s" % [run_seed, id, day, salt]
-	var value := 216613626+	for index in range(text.length()):
+	var value := 216613626
+	for index in range(text.length()):
 		value = (value * 16777619 + text.unicode_at(index)) % 2147483647
 	return absi(value)
 
