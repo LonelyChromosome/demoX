@@ -14,6 +14,7 @@ var input_enabled := true
 var resolving := false
 var building_system := BuildingSystem.new()
 var staffing_system := StaffingSystem.new()
+var medical_system := MedicalSystem.new()
 var resolution_unit_snapshot: Dictionary = {}
 var resolution_building_snapshot: Dictionary = {}
 
@@ -114,8 +115,18 @@ func _plan_move(unit_id: String, target: Vector2i) -> bool:
 	var job_slot := turn_manager.get_job_slot_at(target)
 	var target_farm := staffing_system.active_farm_at(state, target)
 	var origin_farm := staffing_system.active_farm_at(state, unit.board_cell)
-	var uses_farm_position_role := (
-		target_farm != null or (origin_farm != null and job_slot.is_empty())
+	var automatic_role := (
+		not job_slot.is_empty()
+		and int(job_slot.role) in [
+			GameEnums.JobRole.TREATMENT,
+			GameEnums.JobRole.PRISON_MANAGER,
+			GameEnums.JobRole.PRISON_GUARD,
+		]
+	)
+	var uses_position_role := (
+		target_farm != null
+		or (origin_farm != null and job_slot.is_empty())
+		or automatic_role
 	)
 	turn_manager.queue_move(unit_id, target)
 	if construction_building != null:
@@ -129,12 +140,18 @@ func _plan_move(unit_id: String, target: Vector2i) -> bool:
 			and unit.work_building_id != target_farm.id
 		):
 			turn_manager.plan_job_drop(unit_id, target)
-	elif not uses_farm_position_role and not job_slot.is_empty():
+	elif automatic_role:
+		turn_manager.plan_work_unassign(unit_id, str(job_slot.building_id))
 		if not turn_manager.plan_job_drop(unit_id, target):
 			turn_manager.cancel_move(unit_id)
 			view.flash_invalid_cell(target)
 			return false
-	elif not uses_farm_position_role:
+	elif not uses_position_role and not job_slot.is_empty():
+		if not turn_manager.plan_job_drop(unit_id, target):
+			turn_manager.cancel_move(unit_id)
+			view.flash_invalid_cell(target)
+			return false
+	elif not uses_position_role:
 		turn_manager.plan_job_drop(unit_id, target)
 	_refresh_view()
 	return true
@@ -149,6 +166,10 @@ func _is_free_target(cell: Vector2i, moving_unit_id: String) -> bool:
 		if not _is_active_farm_core(core_building, cell):
 			return false
 	var planned_targets := turn_manager.get_planned_move_targets()
+	var infirmary := medical_system.infirmary_at_slot(state, cell)
+	var moving_unit := state.units.get(moving_unit_id) as UnitState
+	if infirmary != null and (moving_unit == null or not moving_unit.injured):
+		return false
 	for candidate in state.units.values():
 		if not (candidate is UnitState) or candidate.id == moving_unit_id:
 			continue
