@@ -17,6 +17,7 @@ const OUTCOME_INJURY := "injury"
 const OUTCOME_DEATH := "death"
 
 var world_system := WorldSystem.new()
+var promotion_system := PromotionSystem.new()
 
 
 func can_dispatch(unit_ids: Array[String]) -> bool:
@@ -238,7 +239,29 @@ func _apply_outcome(state: GameState, expedition: ExpeditionState, result: TurnR
 	else:
 		result.expedition_events.append({"kind": "empty", "text": "%s trở về tay trắng." % _team_names(state, expedition.unit_ids)})
 		_add_memory(state, expedition, "expedition_survived")
+	if expedition.outcome_kind in [OUTCOME_FOOD, OUTCOME_MATERIALS, OUTCOME_OUTSIDERS]:
+		_grant_success_merit(state, expedition, result)
 	world_system.record_expedition_result(state, expedition, result)
+
+
+func _grant_success_merit(
+	state: GameState, expedition: ExpeditionState, result: TurnResolutionResult
+) -> void:
+	for unit_id in expedition.unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null:
+			continue
+		var granted := promotion_system.grant_merit(
+			unit,
+			PromotionSystem.EXPEDITION_SUCCESS_MERIT,
+			"expedition",
+			state.day,
+			"successful_%s" % expedition.outcome_kind,
+			"expedition:%s:%s:%s" % [expedition.id, expedition.outcome_kind, unit.id],
+			result
+		)
+		if granted:
+			promotion_system.append_ready_notice(state, unit, result)
 
 
 func _attempt_return(state: GameState, expedition: ExpeditionState, result: TurnResolutionResult) -> void:

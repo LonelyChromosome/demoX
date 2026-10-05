@@ -59,6 +59,10 @@ var wasteland_food_spent := 0
 var wasteland_started := false
 var perimeter_food_produced := 0
 var perimeter_materials_produced := 0
+var merit_grants: Array[Dictionary] = []
+var promotion_events: Array[Dictionary] = []
+var promotion_started_unit_ids: Array[String] = []
+var promoted_unit_ids: Array[String] = []
 var rejected_orders: Array[Dictionary] = []
 
 

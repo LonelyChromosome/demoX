@@ -14,3 +14,4 @@ var prisoner_action_orders: Array[PrisonerActionOrder] = []
 var expedition_order: DispatchExpeditionOrder
 var outsider_orders: Array[OutsiderDecisionOrder] = []
 var develop_wasteland_order: DevelopWastelandOrder
+var promotion_orders: Array[PromoteUnitOrder] = []

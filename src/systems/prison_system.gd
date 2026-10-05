@@ -266,6 +266,7 @@ func _available_player_at(state: GameState, cell: Vector2i) -> UnitState:
 			and not candidate.locked_by_construction
 			and not candidate.locked_by_healing
 			and candidate.away_days_left <= 0
+			and not candidate.is_in_promotion_training()
 		):
 			return candidate
 	return null

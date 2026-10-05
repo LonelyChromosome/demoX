@@ -17,6 +17,7 @@ var information_system := InformationSystem.new()
 var prison_system := PrisonSystem.new()
 var expedition_system := ExpeditionSystem.new()
 var event_system := EventSystem.new()
+var promotion_system := resolver.promotion_system
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult
@@ -150,6 +151,32 @@ func cancel_expedition() -> void:
 
 func get_planned_expedition() -> DispatchExpeditionOrder:
 	return order_queue.get_expedition()
+
+
+func queue_promotion(
+	unit_id: String, barracks_id: String, target_rank: GameEnums.Rank
+) -> PromoteUnitOrder:
+	if not can_edit_orders() or order_queue.get_promotion(unit_id) != null:
+		return null
+	return order_queue.plan_promotion(unit_id, barracks_id, target_rank, state.day)
+
+
+func cancel_promotion(unit_id: String) -> void:
+	if can_edit_orders():
+		order_queue.cancel_promotion(unit_id)
+
+
+func get_planned_promotion(unit_id: String) -> PromoteUnitOrder:
+	return order_queue.get_promotion(unit_id)
+
+
+func available_promotions(unit_id: String) -> Array[Dictionary]:
+	if state == null:
+		var empty: Array[Dictionary] = []
+		return empty
+	return promotion_system.available_promotions(
+		state, state.units.get(unit_id) as UnitState
+	)
 
 
 func queue_outsider_action(

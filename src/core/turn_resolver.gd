@@ -12,6 +12,7 @@ var expedition_system := ExpeditionSystem.new()
 var outside_system := OutsideSystem.new()
 var world_system := WorldSystem.new()
 var event_system := EventSystem.new()
+var promotion_system := PromotionSystem.new()
 var perimeter_system := PerimeterSystem.new()
 var ruin_system := RuinSystem.new()
 
@@ -34,6 +35,10 @@ enum Phase {
 }
 
 
+func _init() -> void:
+	expedition_system.promotion_system = promotion_system
+
+
 func resolve(
 	state: GameState, snapshot: PendingOrderSnapshot, building_system: BuildingSystem
 ) -> TurnResolutionResult:
@@ -51,6 +56,21 @@ func resolve(
 		state, snapshot.demolish_building_order, building_system, result
 	)
 	var blocked_unit_ids := _blocked_unit_ids(snapshot)
+	var valid_promotions: Array[Dictionary] = []
+	for promotion_order in snapshot.promotion_orders:
+		var promotion_validation := promotion_system.validate_order(
+			state, promotion_order, blocked_unit_ids
+		)
+		if not promotion_validation.valid:
+			result.reject(
+				"promotion", promotion_order.unit_id, promotion_validation.reason
+			)
+			continue
+		valid_promotions.append({
+			"order": promotion_order,
+			"definition": promotion_validation.definition,
+		})
+		blocked_unit_ids[promotion_order.unit_id] = true
 	var reserved_away_unit_ids := {}
 	var valid_expedition := (
 		snapshot.expedition_order != null
@@ -89,6 +109,11 @@ func resolve(
 	staffing_system.commit(state, valid_staffing, result)
 	prison_system.commit_actions(state, snapshot.prisoner_action_orders, result)
 	prison_system.commit_labor(state, snapshot.prisoner_labor_orders, result)
+	for promotion in valid_promotions:
+		if not promotion_system.commit_training(
+			state, promotion.order, promotion.definition, result
+		):
+			result.reject("promotion", promotion.order.unit_id, "Không thể bắt đầu huấn luyện")
 
 	_run_phase(Phase.COMMIT_OUTSIDE_ORDERS, result)
 	if valid_expedition:
@@ -405,6 +430,7 @@ func _resolve_systems(
 		skip_expeditions[expedition_id] = true
 	expedition_system.advance(state, skip_expeditions, result)
 	perimeter_system.resolve_daily(state, result.wasteland_started, result)
+	promotion_system.advance_training(state, result)
 
 
 func _blocked_unit_ids(snapshot: PendingOrderSnapshot) -> Dictionary:

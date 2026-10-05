@@ -40,11 +40,28 @@ var memories: Array[String] = []
 var backstory: Array[String] = []
 var memory_tags: Array[Dictionary] = []
 
+var merit := 0
+var lifetime_merit := 0
+var merit_history: Array[Dictionary] = []
+var merit_grant_keys: Dictionary = {}
+var promotion_history: Array[Dictionary] = []
+var promotion_target_rank := -1
+var promotion_barracks_id := ""
+var promotion_started_day := 0
+var promotion_complete_day := 0
+var promotion_order_key := ""
+var promotion_last_advanced_day := 0
+var promotion_ready_notified: Dictionary = {}
+
 func _init(unit_id := "") -> void:
 	id = unit_id
 
 func is_in_city_roster() -> bool:
 	return faction == GameEnums.Faction.PLAYER and not is_prisoner
+
+
+func is_in_promotion_training() -> bool:
+	return promotion_target_rank >= 0
 
 func can_be_moved() -> bool:
 	return (
@@ -55,6 +72,7 @@ func can_be_moved() -> bool:
 		and away_days_left <= 0
 		and away_assignment_id.is_empty()
 		and not return_pending
+		and not is_in_promotion_training()
 	)
 
 
@@ -66,6 +84,7 @@ func can_manage_city() -> bool:
 		and away_days_left <= 0
 		and away_assignment_id.is_empty()
 		and not return_pending
+		and not is_in_promotion_training()
 	)
 
 func can_be_builder() -> bool:
@@ -79,4 +98,5 @@ func can_be_builder() -> bool:
 		and away_days_left <= 0
 		and away_assignment_id.is_empty()
 		and not return_pending
+		and not is_in_promotion_training()
 	)

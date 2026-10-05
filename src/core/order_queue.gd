@@ -19,6 +19,7 @@ var _prisoner_action_orders: Dictionary = {}
 var _expedition_order: DispatchExpeditionOrder
 var _outsider_orders: Dictionary = {}
 var _develop_wasteland_order: DevelopWastelandOrder
+var _promotion_orders: Dictionary = {}
 
 
 func plan_move(
@@ -106,6 +107,24 @@ func cancel_expedition() -> void:
 
 func get_expedition() -> DispatchExpeditionOrder:
 	return _expedition_order
+
+
+func plan_promotion(
+	unit_id: String, barracks_id: String, target_rank: GameEnums.Rank, day: int
+) -> PromoteUnitOrder:
+	var order := PromoteUnitOrder.new(unit_id, barracks_id, target_rank, day)
+	_promotion_orders[unit_id] = order
+	changed.emit()
+	return order
+
+
+func cancel_promotion(unit_id: String) -> void:
+	if _promotion_orders.erase(unit_id):
+		changed.emit()
+
+
+func get_promotion(unit_id: String) -> PromoteUnitOrder:
+	return _promotion_orders.get(unit_id) as PromoteUnitOrder
 
 
 func plan_outsider_decision(
@@ -371,6 +390,12 @@ func snapshot() -> PendingOrderSnapshot:
 		result.assign_builder_orders.append((_assign_builder_orders[building_id] as AssignBuilderOrder).copy())
 	for key in _remove_builder_orders:
 		result.remove_builder_orders.append((_remove_builder_orders[key] as RemoveBuilderOrder).copy())
+	var promotion_unit_ids := _promotion_orders.keys()
+	promotion_unit_ids.sort()
+	for unit_id in promotion_unit_ids:
+		result.promotion_orders.append(
+			(_promotion_orders[unit_id] as PromoteUnitOrder).copy()
+		)
 	return result
 
 
@@ -392,6 +417,7 @@ func clear() -> void:
 	_planned_builder_cells.clear()
 	_assign_builder_orders.clear()
 	_remove_builder_orders.clear()
+	_promotion_orders.clear()
 	if had_orders:
 		changed.emit()
 
@@ -412,4 +438,5 @@ func is_empty() -> bool:
 		and _assign_builder_orders.is_empty()
 		and _remove_builder_orders.is_empty()
 		and _planned_job_slots.is_empty()
+		and _promotion_orders.is_empty()
 	)

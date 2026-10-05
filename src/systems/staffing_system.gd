@@ -167,6 +167,7 @@ func _is_valid_farm_person(candidate: Variant) -> bool:
 		and candidate.away_days_left <= 0
 		and candidate.away_assignment_id.is_empty()
 		and not candidate.return_pending
+		and not candidate.is_in_promotion_training()
 	)
 
 
@@ -410,6 +411,7 @@ func _validate_unit(
 		or unit.away_days_left > 0
 		or not unit.away_assignment_id.is_empty()
 		or unit.return_pending
+		or unit.is_in_promotion_training()
 	):
 		return {"valid": false, "reason": "Quân hiện không thể nhận công việc"}
 	if not is_operational_square(building, unit.board_cell):

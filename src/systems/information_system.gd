@@ -32,6 +32,7 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 	_append_role_changes(result, entries)
 	_append_medical_prison_events(result, entries)
 	_append_outside_events(result, entries)
+	_append_progression_events(state, result, entries)
 	_append_world_events(result, entries)
 	_append_perimeter_events(result, entries)
 	_append_event_reports(result, entries)
@@ -366,6 +367,39 @@ func _append_outside_events(result: TurnResolutionResult, entries: Array[ReportE
 		entries.append(ReportEntry.new(
 			event.text, result.resolved_day,
 			GameEnums.FactConfidence.CONFIRMED, "Refugee camp"
+		))
+
+
+func _append_progression_events(
+	state: GameState, result: TurnResolutionResult, entries: Array[ReportEntry]
+) -> void:
+	if not result.merit_grants.is_empty():
+		var total := 0
+		for grant_entry in result.merit_grants:
+			total += int(grant_entry.amount)
+		var text := "%d quân nhận tổng cộng %d Chiến công từ chuyến thám hiểm." % [
+			result.merit_grants.size(), total,
+		]
+		if result.merit_grants.size() == 1:
+			var single_grant: Dictionary = result.merit_grants[0]
+			var unit := state.units.get(single_grant.unit_id) as UnitState
+			var unit_name: String = (
+				unit.display_name
+				if unit != null and not unit.display_name.is_empty()
+				else str(single_grant.unit_id)
+			)
+			text = "%s nhận %d Chiến công từ chuyến thám hiểm." % [
+				unit_name, int(single_grant.amount),
+			]
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED,
+			"Expedition", "", GameEnums.AttentionLevel.NORMAL, "summary"
+		))
+	for event in result.promotion_events:
+		var attention := int(event.get("attention", GameEnums.AttentionLevel.NORMAL))
+		entries.append(ReportEntry.new(
+			event.text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED,
+			"Barracks", "promotion:%s" % event.unit_id, attention, "summary"
 		))
 
 
