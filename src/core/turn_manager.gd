@@ -553,3 +553,14 @@ func _player_king() -> UnitState:
 		):
 			return candidate
 	return null
+
+
+func _player_king() -> UnitState:
+	for candidate in state.units.values():
+		if (
+			candidate is UnitState
+			and candidate.faction == GameEnums.Faction.PLAYER
+			and candidate.rank == GameEnums.Rank.KING
+		):
+			return candidate
+	return null
