@@ -328,6 +328,10 @@ func _draw_job_slots(origin: Vector2, tile: float) -> void:
 			continue
 		var role: int = job_slots[cell]
 		var color := Color("61d6a3") if role == GameEnums.JobRole.BUILDER else Color("f0c96a")
+		if role == GameEnums.JobRole.TREATMENT:
+			color = Color("7ed7db")
+		elif role in [GameEnums.JobRole.PRISON_MANAGER, GameEnums.JobRole.PRISON_GUARD]:
+			color = Color("aeb1bd")
 		var rect := _cell_rect(cell, origin, tile).grow(-tile * 0.15)
 		draw_rect(rect, Color(color.r, color.g, color.b, 0.18))
 		draw_rect(rect, color, false, 2.0)
@@ -338,6 +342,12 @@ func _draw_job_slots(origin: Vector2, tile: float) -> void:
 			mark = "⚙"
 		elif role == GameEnums.JobRole.MANAGER:
 			mark = "◆"
+		elif role == GameEnums.JobRole.TREATMENT:
+			mark = "+"
+		elif role == GameEnums.JobRole.PRISON_MANAGER:
+			mark = "◆"
+		elif role == GameEnums.JobRole.PRISON_GUARD:
+			mark = "◇"
 		draw_string(font, rect.position + Vector2(5, 17), mark, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
 
 
@@ -402,6 +412,8 @@ func _draw_building(building: BuildingState, origin: Vector2, tile: float, ghost
 		GameEnums.BuildingPhase.BUILDING,
 	]
 	_draw_core_marker(building, origin, tile, color, translucent)
+	if building.type == GameEnums.BuildingType.PRISON and not building.prisoner_unit_ids.is_empty():
+		_draw_prisoner_badge(building, origin, tile, color.a)
 	var core_rect := _cell_rect(building.core_cell, origin, tile).grow(-tile * 0.25)
 	if building.phase == GameEnums.BuildingPhase.BUILDING:
 		draw_line(core_rect.position, core_rect.end, Color(1, 1, 1, 0.42), 2.0)
@@ -505,6 +517,27 @@ func _draw_core_marker(
 		var badge_center := rect.position + Vector2(rect.size.x - 8.0, 8.0)
 		draw_circle(badge_center, 5.0, Color("79d8a5"))
 		draw_arc(badge_center, 5.0, 0.0, TAU, 18, Color(1, 1, 1, 0.72), 1.2)
+
+
+func _draw_prisoner_badge(
+	building: BuildingState, origin: Vector2, tile: float, alpha: float
+) -> void:
+	var rect := _cell_rect(building.core_cell, origin, tile)
+	var center := rect.position + Vector2(tile * 0.78, tile * 0.22)
+	draw_circle(center, tile * 0.13, Color(0.12, 0.13, 0.14, 0.92 * alpha))
+	var label := "♟%d" % building.prisoner_unit_ids.size()
+	var font := get_theme_default_font()
+	var font_size := maxi(11, floori(tile * 0.14))
+	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	draw_string(
+		font,
+		center + Vector2(-text_size.x * 0.5, text_size.y * 0.32),
+		label,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		font_size,
+		Color(0.95, 0.95, 0.95, alpha)
+	)
 
 
 func _draw_coordinates(origin: Vector2, tile: float, board_px: float) -> void:
