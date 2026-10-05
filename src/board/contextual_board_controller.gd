@@ -22,9 +22,12 @@ var board: BoardView
 var popup: ContextPopup
 var placement := BuildingPlacementState.new()
 var building_system := BuildingSystem.new()
+var medical_system := MedicalSystem.new()
+var prison_system := PrisonSystem.new()
 var current_cell := Vector2i(-1, -1)
 var current_building_id := ""
 var current_unit_id := ""
+var current_prisoner_id := ""
 var visual_locked := false
 
 
@@ -40,6 +43,7 @@ func setup(game_state: GameState, manager: TurnManager, board_view: BoardView, m
 	turn_manager.order_queue.changed.connect(refresh)
 	turn_manager.resolution_finished.connect(func(_result): refresh())
 	turn_manager.resolution_started.connect(_on_resolution_started)
+	turn_manager.prisoner_decision_requested.connect(_on_prisoner_decision_requested)
 	board.resolution_animation_finished.connect(_on_resolution_animation_finished)
 	refresh()
 
@@ -50,6 +54,7 @@ func open_for_cell(cell: Vector2i) -> void:
 	current_cell = cell
 	current_building_id = ""
 	current_unit_id = ""
+	current_prisoner_id = ""
 	var unit := _unit_at(cell)
 	if unit != null:
 		current_unit_id = unit.id
@@ -61,7 +66,7 @@ func open_for_cell(cell: Vector2i) -> void:
 			unit_actions["cancel_inspection"] = "Hủy kiểm tra trực tiếp"
 		popup.open_at(
 			board.cell_screen_position(cell),
-			unit.display_name if not unit.display_name.is_empty() else unit.id,
+			unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank),
 			_unit_detail(unit),
 			unit_actions
 		)
@@ -85,6 +90,14 @@ func open_for_cell(cell: Vector2i) -> void:
 	var actions := {}
 	var detail := turn_manager.information_system.building_detail(state, building)
 	detail += _planned_label(building)
+	if cell != building.core_cell:
+		var role := int(building.job_slots.get(cell, GameEnums.JobRole.NONE))
+		if role == GameEnums.JobRole.TREATMENT:
+			detail += "\nVị trí điều trị"
+		elif role == GameEnums.JobRole.PRISON_MANAGER:
+			detail += "\nVị trí Chủ quản"
+		elif role == GameEnums.JobRole.PRISON_GUARD:
+			detail += "\nVị trí Canh giữ"
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
 		detail += "\nKéo trực tiếp quân vào một trong 8 ô vận hành để bắt đầu xây."
 		detail += "\nVị trí: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
@@ -103,6 +116,8 @@ func open_for_cell(cell: Vector2i) -> void:
 			actions["cancel_demolition"] = "Hủy lệnh phá"
 		else:
 			actions["demolish"] = "Phá công trình"
+		if building.type == GameEnums.BuildingType.PRISON:
+			_add_prison_actions(building, actions)
 	elif building.phase == GameEnums.BuildingPhase.ACTIVE:
 		if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
 			actions["workshop_manager_slot"] = "Đặt ô quản lý xưởng"
@@ -127,6 +142,8 @@ func undo_current() -> bool:
 
 
 func refresh() -> void:
+	medical_system.prepare_slots(state)
+	prison_system.prepare_staff_positions(state)
 	var planned_buildings := turn_manager.get_planned_buildings()
 	board.present_buildings(state.buildings, planned_buildings, placement, building_system)
 	var slots := {}
@@ -189,6 +206,16 @@ func _on_action_confirmed(action: String) -> void:
 		turn_manager.queue_building_inspection(current_building_id)
 	elif action == "cancel_inspection":
 		turn_manager.cancel_building_inspection()
+	elif action.begins_with("prison_release:"):
+		turn_manager.queue_prisoner_action(action.get_slice(":", 1), GameEnums.PrisonerAction.RELEASE)
+	elif action.begins_with("prison_kill:"):
+		turn_manager.queue_prisoner_action(action.get_slice(":", 1), GameEnums.PrisonerAction.KILL)
+	elif action.begins_with("prison_continue:"):
+		turn_manager.queue_prisoner_action(action.get_slice(":", 1), GameEnums.PrisonerAction.CONTINUE)
+	elif action.begins_with("prison_submit:"):
+		turn_manager.queue_prisoner_action(action.get_slice(":", 1), GameEnums.PrisonerAction.SUBMIT)
+	elif action.begins_with("prison_labor:"):
+		turn_manager.queue_prisoner_labor(action.get_slice(":", 1), action.get_slice(":", 2))
 	elif action == "clear_slot":
 		var building := _building_at(current_cell)
 		if building != null:
@@ -315,3 +342,51 @@ func _planned_label(building: BuildingState) -> String:
 
 func _on_popup_closed() -> void:
 	board.present_context_target()
+
+
+
+func _add_prison_actions(prison: BuildingState, actions: Dictionary) -> void:
+	var fact := turn_manager.information_system.get_building_fact(prison.id)
+	var prisoner_ids: Array = []
+	if state.day_one_full_knowledge:
+		prisoner_ids = prison.prisoner_unit_ids.duplicate()
+	elif fact != null:
+		prisoner_ids = fact.values.get("prisoner_ids", [])
+	if prisoner_ids.is_empty():
+		return
+	prisoner_ids.sort()
+	current_prisoner_id = str(prisoner_ids[0])
+	var prisoner := state.units.get(current_prisoner_id) as UnitState
+	if prisoner == null or not prisoner.is_prisoner:
+		return
+	if prisoner.escape_attempt_pending:
+		actions["prison_continue:%s" % prisoner.id] = "Giam tiếp"
+	else:
+		actions["prison_release:%s" % prisoner.id] = "Thả tù binh"
+		actions["prison_kill:%s" % prisoner.id] = "Xử lý tù binh"
+	if prisoner.submission_requested:
+		actions["prison_submit:%s" % prisoner.id] = "Chấp nhận quy phục"
+	var target := _first_construction()
+	if target != null:
+		actions["prison_labor:%s:%s" % [prisoner.id, target.id]] = (
+			"Lao động xây dựng tại %s" % _cell_name(target.core_cell)
+		)
+
+
+func _first_construction() -> BuildingState:
+	var ids := state.buildings.keys()
+	ids.sort()
+	for building_id in ids:
+		var building := state.buildings.get(building_id) as BuildingState
+		if building != null and building.phase == GameEnums.BuildingPhase.BUILDING:
+			return building
+	return null
+
+
+func _on_prisoner_decision_requested(unit_id: String) -> void:
+	var unit := state.units.get(unit_id) as UnitState
+	if unit == null:
+		return
+	var prison := state.buildings.get(unit.prison_building_id) as BuildingState
+	if prison != null:
+		open_for_cell(prison.core_cell)
