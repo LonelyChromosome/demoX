@@ -9,3 +9,4 @@ var remove_builder_orders: Array[RemoveBuilderOrder] = []
 var demolish_building_order: DemolishBuildingOrder
 var staffing_orders: Array[SetBuildingStaffOrder] = []
 var inspect_building_order: InspectBuildingOrder
+var inspect_building_order: InspectBuildingOrder
