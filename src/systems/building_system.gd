@@ -121,7 +121,11 @@ func reassign_builder_to_construction(
 		building.phase = GameEnums.BuildingPhase.BUILDING
 		if building.days_left <= 0:
 			building.days_left = build_days(building.type, 1)
+	var previous_builder_count := building.builder_unit_ids.size()
 	building.builder_unit_ids.append(unit_id)
+	if previous_builder_count < 2 and building.builder_unit_ids.size() >= 2:
+		building.accelerated_by_builders = true
+		building.days_left = mini(building.days_left, build_days(building.type, building.builder_unit_ids.size()))
 	if slot_cell != Vector2i(-1, -1):
 		building.job_slots[slot_cell] = GameEnums.JobRole.BUILDER
 	unit.locked_by_construction = true
