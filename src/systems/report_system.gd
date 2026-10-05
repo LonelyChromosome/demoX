@@ -6,11 +6,21 @@ enum Accuracy { EXACT, VAGUE_BUT_TRUE, UNRELIABLE }
 func accuracy_for_manager(manager: UnitState) -> Accuracy:
 	if manager == null:
 		return Accuracy.VAGUE_BUT_TRUE
-	if manager.loyalty > 3:
+	if manager.loyalty >= InformationSystem.HIGH_LOYALTY:
 		return Accuracy.EXACT
-	if manager.loyalty >= 0:
+	if manager.loyalty >= InformationSystem.MEDIUM_LOYALTY:
 		return Accuracy.VAGUE_BUT_TRUE
 	return Accuracy.UNRELIABLE
 
 func can_report(state: GameState, type: GameEnums.BuildingType) -> bool:
-	return state.day_one_full_knowledge or state.has_active_building(type)
+	if state.day_one_full_knowledge:
+		return true
+	for candidate in state.buildings.values():
+		if (
+			candidate is BuildingState
+			and candidate.type == type
+			and candidate.phase == GameEnums.BuildingPhase.ACTIVE
+			and state.units.has(candidate.manager_unit_id)
+		):
+			return true
+	return false
