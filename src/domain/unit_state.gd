@@ -11,6 +11,8 @@ var board_cell := Vector2i(-1, -1)
 
 var loyalty := 0
 var rebellion_level: GameEnums.RebellionLevel = GameEnums.RebellionLevel.NONE
+var loyalty_history: Array[Dictionary] = []
+var loyalty_source_keys: Dictionary = {}
 var injured := false
 var healing_days_left := 0
 var hunger_streak := 0

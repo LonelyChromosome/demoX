@@ -63,6 +63,7 @@ var merit_grants: Array[Dictionary] = []
 var promotion_events: Array[Dictionary] = []
 var promotion_started_unit_ids: Array[String] = []
 var promoted_unit_ids: Array[String] = []
+var loyalty_events: Array[Dictionary] = []
 var rejected_orders: Array[Dictionary] = []
 
 

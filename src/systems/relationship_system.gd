@@ -79,6 +79,48 @@ func available_relationship_events(
 	return available
 
 
+func can_confirm_romance(
+	state: GameState, first_unit_id: String, second_unit_id: String
+) -> bool:
+	var relationship := relationship_between(
+		state, first_unit_id, second_unit_id, false
+	)
+	return (
+		relationship != null
+		and relationship.status == RelationshipState.ROMANCE_CANDIDATE
+	)
+
+
+func confirm_romance(
+	state: GameState, first_unit_id: String, second_unit_id: String,
+	day: int, source_key: String
+) -> bool:
+	if source_key.is_empty() or not can_confirm_romance(
+		state, first_unit_id, second_unit_id
+	):
+		return false
+	var relationship := relationship_between(
+		state, first_unit_id, second_unit_id, false
+	)
+	if relationship.applied_source_keys.has(source_key):
+		return false
+	relationship.applied_source_keys[source_key] = true
+	relationship.status = RelationshipState.BONDED
+	relationship.last_changed_day = day
+	if "romance" not in relationship.tags:
+		relationship.tags.append("romance")
+	relationship.shared_history.append({
+		"day": day,
+		"source": "relationship_choice",
+		"reason": "romance_confirmed",
+		"source_key": source_key,
+		"affinity_delta": 0,
+		"trust_delta": 0,
+		"tags": ["romance", "bonded"],
+	})
+	return true
+
+
 func _adjust(
 	state: GameState, first_unit_id: String, second_unit_id: String,
 	affinity_delta: int, trust_delta: int, day: int,

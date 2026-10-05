@@ -14,6 +14,7 @@ var world_system := WorldSystem.new()
 var event_system := EventSystem.new()
 var promotion_system := PromotionSystem.new()
 var relationship_system := RelationshipSystem.new()
+var loyalty_system := LoyaltySystem.new()
 var perimeter_system := PerimeterSystem.new()
 var ruin_system := RuinSystem.new()
 
