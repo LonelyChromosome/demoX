@@ -12,6 +12,7 @@ var state: GameState
 var order_queue := OrderQueue.new()
 var resolver := TurnResolver.new()
 var building_system := BuildingSystem.new()
+var information_system := InformationSystem.new()
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult
@@ -19,6 +20,7 @@ var _pending_result: TurnResolutionResult
 
 func setup(game_state: GameState) -> void:
 	state = game_state
+	information_system.initialize_day_one(state)
 	if not resolver.phase_started.is_connected(_on_resolution_phase_started):
 		resolver.phase_started.connect(_on_resolution_phase_started)
 
@@ -26,10 +28,53 @@ func setup(game_state: GameState) -> void:
 func queue_move(unit_id: String, target: Vector2i) -> MoveUnitOrder:
 	if not can_edit_orders():
 		return null
+	if order_queue.has_inspection_for_unit(unit_id):
+		return null
 	var unit := state.units.get(unit_id) as UnitState
 	if unit == null:
 		return null
 	return order_queue.plan_move(unit_id, unit.board_cell, target, state.day)
+
+
+func queue_building_inspection(building_id: String) -> InspectBuildingOrder:
+	if not can_edit_orders():
+		return null
+	var king := _player_king()
+	var building := state.buildings.get(building_id) as BuildingState
+	if king == null or building == null or not king.can_be_moved():
+		return null
+	if order_queue.get_move(king.id) != null:
+		return null
+	if king.board_cell not in building_system.footprint(building.core_cell):
+		return null
+	return order_queue.plan_inspection(building_id, king.id, state.day)
+
+
+func cancel_building_inspection() -> void:
+	if can_edit_orders():
+		order_queue.cancel_inspection()
+
+
+func get_planned_inspection() -> InspectBuildingOrder:
+	return order_queue.get_inspection()
+
+
+func has_planned_inspection_for_unit(unit_id: String) -> bool:
+	return order_queue.has_inspection_for_unit(unit_id)
+
+
+func can_plan_inspection(building_id: String) -> bool:
+	if not can_edit_orders():
+		return false
+	var king := _player_king()
+	var building := state.buildings.get(building_id) as BuildingState
+	return (
+		king != null
+		and building != null
+		and king.can_be_moved()
+		and order_queue.get_move(king.id) == null
+		and king.board_cell in building_system.footprint(building.core_cell)
+	)
 
 
 func cancel_move(unit_id: String) -> void:
@@ -399,6 +444,7 @@ func submit_ration(fed_unit_ids: Array[String]) -> TurnResolutionResult:
 
 
 func _complete_resolution(result: TurnResolutionResult) -> void:
+	information_system.resolve_daily_information(state, result)
 	order_queue.clear()
 	_pending_snapshot = null
 	_pending_result = null
@@ -496,3 +542,14 @@ func _next_building_id() -> String:
 
 func _on_resolution_phase_started(phase: int) -> void:
 	resolution_phase_started.emit(phase)
+
+
+func _player_king() -> UnitState:
+	for candidate in state.units.values():
+		if (
+			candidate is UnitState
+			and candidate.faction == GameEnums.Faction.PLAYER
+			and candidate.rank == GameEnums.Rank.KING
+		):
+			return candidate
+	return null
