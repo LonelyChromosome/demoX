@@ -22,6 +22,14 @@ var locked_by_construction := false
 var locked_by_healing := false
 var away_days_left := 0
 
+var is_prisoner := false
+var prison_building_id := ""
+var prisoner_labor := false
+var labor_building_id := ""
+var prison_days := 0
+var escape_attempt_pending := false
+var submission_requested := false
+
 var guard_days := 0
 var food_brought_home := 0
 var materials_brought_home := 0
@@ -32,7 +40,7 @@ func _init(unit_id := "") -> void:
 	id = unit_id
 
 func is_in_city_roster() -> bool:
-	return faction == GameEnums.Faction.PLAYER
+	return faction == GameEnums.Faction.PLAYER and not is_prisoner
 
 func can_be_moved() -> bool:
 	return not locked_by_construction and not locked_by_healing and away_days_left <= 0
