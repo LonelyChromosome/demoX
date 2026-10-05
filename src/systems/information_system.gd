@@ -10,6 +10,7 @@ const LOW_LOYALTY := -3
 var observed := ObservedState.new()
 var food_system := FoodSystem.new()
 var material_system := MaterialSystem.new()
+var prison_system := PrisonSystem.new()
 
 
 func initialize_day_one(state: GameState) -> void:
@@ -29,6 +30,7 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 	_append_resource_entries(result, entries)
 	_append_visible_events(result, entries)
 	_append_role_changes(result, entries)
+	_append_medical_prison_events(result, entries)
 	_update_visible_building_facts(state, result, updated_keys)
 	for candidate in state.buildings.values():
 		if not (candidate is BuildingState) or candidate.phase != GameEnums.BuildingPhase.ACTIVE:
@@ -153,9 +155,11 @@ func _reported_building_fact(
 		fact.values["manager_name"] = _unit_name(source)
 		fact.values["staff_count"] = staff_count
 		fact.values["daily_output"] = _building_output(state, building)
+		_add_special_building_values(state, building, fact.values, true)
 	elif quality == ReportQuality.MEDIUM:
 		fact.values["manager_name"] = _unit_name(source)
 		fact.values["staff_count"] = staff_count
+		_add_special_building_values(state, building, fact.values, false)
 	else:
 		var offset := -1 if _stable_code(building.id, source.id, day) % 2 == 0 else 1
 		fact.values["staff_count"] = maxi(0, staff_count + offset)
@@ -180,6 +184,7 @@ func _exact_building_fact(
 		"staff_count": _unique_staff_count(building),
 		"daily_output": _building_output(state, building),
 	}
+	_add_special_building_values(state, building, fact.values, true)
 	return fact
 
 
@@ -284,6 +289,35 @@ func _append_role_changes(result: TurnResolutionResult, entries: Array[ReportEnt
 		))
 
 
+func _append_medical_prison_events(
+	result: TurnResolutionResult, entries: Array[ReportEntry]
+) -> void:
+	for event in result.medical_events:
+		var text := "%s đã vào Y xá điều trị." % event.unit_name
+		if event.kind == "recovered":
+			text = "%s đã hồi phục." % event.unit_name
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Y xá"
+		))
+	for event in result.prison_events:
+		var text := "Nhà giam thiếu người canh giữ."
+		if event.kind == "admitted":
+			text = "%s đã được đưa vào Nhà giam." % event.unit_name
+		elif event.kind == "labor":
+			text = "%s đã lao động hỗ trợ xây dựng." % event.unit_name
+		elif event.kind == "released":
+			text = "%s đã được thả." % event.unit_name
+		elif event.kind == "killed":
+			text = "%s đã bị xử lý." % event.unit_name
+		elif event.kind == "submitted":
+			text = "%s đã quy phục và trở thành Tốt." % event.unit_name
+		elif event.kind == "continued":
+			text = "%s tiếp tục bị giam." % event.unit_name
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
+		))
+
+
 func _update_visible_building_facts(
 	state: GameState, result: TurnResolutionResult, updated_keys: Dictionary
 ) -> void:
@@ -360,6 +394,21 @@ func _format_building_fact(fact: KnownFact, current_day: int) -> String:
 		lines.append("Nhân lực: %d" % values.staff_count)
 	if values.has("daily_output"):
 		lines.append("Sản lượng hôm qua: %s" % _output_text(values.type, values.daily_output))
+	if values.has("patient_count") and values.get("type") == GameEnums.BuildingType.INFIRMARY:
+		lines.append("Bệnh nhân: %d/3" % values.patient_count)
+	if values.has("prisoner_count") and values.get("type") == GameEnums.BuildingType.PRISON:
+		lines.append("Tù binh: %d" % values.prisoner_count)
+		lines.append("Canh giữ: %d/2" % values.get("guard_count", 0))
+		lines.append("Trạng thái: %s" % (
+			"CANH GIỮ THIẾU" if values.get("under_guarded", false) else "Canh giữ đầy đủ"
+		))
+		lines.append("Đang lao động: %d" % values.get("prisoner_labor_count", 0))
+		for prisoner in values.get("prisoners", []):
+			lines.append("%s %s · %s" % [
+				_rank_glyph(prisoner.rank),
+				prisoner.name,
+				"đang lao động" if prisoner.labor else "đang bị giam",
+			])
 	lines.append("Nguồn: %s" % (fact.source_label if not fact.source_label.is_empty() else "Chưa rõ"))
 	lines.append("Độ tin cậy: %s" % confidence_label(fact.confidence, fact.is_stale(current_day)))
 	lines.append("Cập nhật: Ngày %d" % fact.observed_day)
@@ -393,6 +442,35 @@ func _unique_staff_count(building: BuildingState) -> int:
 	return staff.size()
 
 
+func _add_special_building_values(
+	state: GameState, building: BuildingState, values: Dictionary, include_people: bool
+) -> void:
+	if building.type == GameEnums.BuildingType.INFIRMARY:
+		values["patient_count"] = building.patient_unit_ids.size()
+	elif building.type == GameEnums.BuildingType.PRISON:
+		values["prisoner_count"] = building.prisoner_unit_ids.size()
+		values["guard_count"] = prison_system.guard_count(building)
+		values["under_guarded"] = building.under_guarded
+		var labor_count := 0
+		var prisoners: Array[Dictionary] = []
+		for unit_id in building.prisoner_unit_ids:
+			var unit := state.units.get(unit_id) as UnitState
+			if unit == null:
+				continue
+			if unit.prisoner_labor:
+				labor_count += 1
+			if include_people:
+				prisoners.append({
+					"name": unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank),
+					"rank": unit.rank,
+					"labor": unit.prisoner_labor,
+				})
+		values["prisoner_labor_count"] = labor_count
+		if include_people:
+			values["prisoners"] = prisoners
+			values["prisoner_ids"] = building.prisoner_unit_ids.duplicate()
+
+
 func _true_unit_condition(unit: UnitState) -> String:
 	if unit.locked_by_healing:
 		return "đang điều trị"
@@ -424,7 +502,15 @@ func _stable_code(first: String, second: String, day: int) -> int:
 func _unit_name(unit: UnitState) -> String:
 	if unit == null:
 		return "—"
-	return unit.display_name if not unit.display_name.is_empty() else unit.id
+	return unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
+
+
+func _rank_name(rank: int) -> String:
+	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
+
+
+func _rank_glyph(rank: int) -> String:
+	return ["♟", "♞", "♜", "♝", "♛", "♚"][rank]
 
 
 func _building_label(fact: KnownFact) -> String:
