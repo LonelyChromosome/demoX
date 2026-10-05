@@ -14,6 +14,8 @@ var _staffing_orders: Dictionary = {}
 var _planned_job_slots: Dictionary = {}
 var _planned_builder_cells: Dictionary = {}
 var _inspect_building_order: InspectBuildingOrder
+var _prisoner_labor_orders: Dictionary = {}
+var _prisoner_action_orders: Dictionary = {}
 
 
 func plan_move(
@@ -52,6 +54,34 @@ func get_inspection() -> InspectBuildingOrder:
 
 func has_inspection_for_unit(unit_id: String) -> bool:
 	return _inspect_building_order != null and _inspect_building_order.king_unit_id == unit_id
+
+
+func plan_prisoner_labor(
+	prisoner_id: String, building_id: String, day: int
+) -> AssignPrisonerLaborOrder:
+	var order := AssignPrisonerLaborOrder.new(prisoner_id, building_id, day)
+	_prisoner_labor_orders[prisoner_id] = order
+	changed.emit()
+	return order
+
+
+func cancel_prisoner_labor(prisoner_id: String) -> void:
+	if _prisoner_labor_orders.erase(prisoner_id):
+		changed.emit()
+
+
+func plan_prisoner_action(
+	prisoner_id: String, action: GameEnums.PrisonerAction, day: int
+) -> PrisonerActionOrder:
+	var order := PrisonerActionOrder.new(prisoner_id, action, day)
+	_prisoner_action_orders[prisoner_id] = order
+	changed.emit()
+	return order
+
+
+func cancel_prisoner_action(prisoner_id: String) -> void:
+	if _prisoner_action_orders.erase(prisoner_id):
+		changed.emit()
 
 
 func move_targets() -> Dictionary:
@@ -247,6 +277,18 @@ func snapshot() -> PendingOrderSnapshot:
 		result.demolish_building_order = _demolish_building_order.copy()
 	if _inspect_building_order != null:
 		result.inspect_building_order = _inspect_building_order.copy()
+	var prisoner_ids := _prisoner_labor_orders.keys()
+	prisoner_ids.sort()
+	for prisoner_id in prisoner_ids:
+		result.prisoner_labor_orders.append(
+			(_prisoner_labor_orders[prisoner_id] as AssignPrisonerLaborOrder).copy()
+		)
+	var action_ids := _prisoner_action_orders.keys()
+	action_ids.sort()
+	for prisoner_id in action_ids:
+		result.prisoner_action_orders.append(
+			(_prisoner_action_orders[prisoner_id] as PrisonerActionOrder).copy()
+		)
 	var staffing_ids := _staffing_orders.keys()
 	staffing_ids.sort()
 	for building_id in staffing_ids:
@@ -268,6 +310,8 @@ func clear() -> void:
 	_cancel_construction_order = null
 	_demolish_building_order = null
 	_inspect_building_order = null
+	_prisoner_labor_orders.clear()
+	_prisoner_action_orders.clear()
 	_staffing_orders.clear()
 	_planned_job_slots.clear()
 	_planned_builder_cells.clear()
@@ -284,6 +328,8 @@ func is_empty() -> bool:
 		and _cancel_construction_order == null
 		and _demolish_building_order == null
 		and _inspect_building_order == null
+		and _prisoner_labor_orders.is_empty()
+		and _prisoner_action_orders.is_empty()
 		and _staffing_orders.is_empty()
 		and _assign_builder_orders.is_empty()
 		and _remove_builder_orders.is_empty()
