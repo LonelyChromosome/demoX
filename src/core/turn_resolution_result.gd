@@ -32,6 +32,9 @@ var starved_unit_names: Dictionary = {}
 var inspection_snapshots: Array[Dictionary] = []
 var inspected_building_ids: Array[String] = []
 var report_entries: Array[ReportEntry] = []
+var medical_events: Array[Dictionary] = []
+var prison_events: Array[Dictionary] = []
+var prison_labor_unit_ids: Array[String] = []
 var rejected_orders: Array[Dictionary] = []
 
 
