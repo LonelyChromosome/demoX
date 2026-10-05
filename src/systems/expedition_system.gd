@@ -18,6 +18,7 @@ const OUTCOME_DEATH := "death"
 
 var world_system := WorldSystem.new()
 var promotion_system := PromotionSystem.new()
+var relationship_system := RelationshipSystem.new()
 
 
 func can_dispatch(unit_ids: Array[String]) -> bool:
@@ -241,7 +242,28 @@ func _apply_outcome(state: GameState, expedition: ExpeditionState, result: TurnR
 		_add_memory(state, expedition, "expedition_survived")
 	if expedition.outcome_kind in [OUTCOME_FOOD, OUTCOME_MATERIALS, OUTCOME_OUTSIDERS]:
 		_grant_success_merit(state, expedition, result)
+	_record_shared_outcome(state, expedition)
 	world_system.record_expedition_result(state, expedition, result)
+
+
+func _record_shared_outcome(state: GameState, expedition: ExpeditionState) -> void:
+	if expedition.unit_ids.size() != TEAM_SIZE:
+		return
+	var source_key := "expedition:%s:outcome:%s" % [
+		expedition.id, expedition.outcome_kind,
+	]
+	relationship_system.shared_event(
+		state,
+		expedition.unit_ids[0],
+		expedition.unit_ids[1],
+		state.day,
+		"expedition",
+		"shared_%s" % expedition.outcome_kind,
+		source_key,
+		1,
+		1,
+		["expedition", expedition.outcome_kind]
+	)
 
 
 func _grant_success_merit(

@@ -28,6 +28,7 @@ var event_sequence := 0
 var perimeter_layout := PerimeterLayout.new()
 var wasteland := WastelandState.new()
 var last_inspection_day := 0
+var relationships: Dictionary = {}
 
 var day_one_full_knowledge := true
 var active_event_id := ""

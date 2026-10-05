@@ -18,6 +18,7 @@ var prison_system := PrisonSystem.new()
 var expedition_system := ExpeditionSystem.new()
 var event_system := EventSystem.new()
 var promotion_system := resolver.promotion_system
+var relationship_system := resolver.relationship_system
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult

@@ -8,8 +8,8 @@ signal cell_context_requested(cell: Vector2i)
 signal resolution_animation_finished
 
 const BOARD_SIZE := 8
-const LIGHT := Color("d7c59d")
-const DARK := Color("59665b")
+const LIGHT := Color("968e78")
+const DARK := Color("505953")
 const BORDER := Color("171b19")
 const GOLD := Color("d9b86c")
 const PLAYER_PIECE := Color("f3ead5")
@@ -300,7 +300,8 @@ func _draw() -> void:
 		for x in range(BOARD_SIZE):
 			var rect := Rect2(origin + Vector2(x, y) * tile, Vector2(tile, tile))
 			var original := LIGHT if (x + y) % 2 == 0 else DARK
-			draw_rect(rect, _progress_color(original, 0.28))
+			draw_rect(rect, _progress_color(original, 0.20))
+			draw_rect(rect, Color(1.0, 1.0, 1.0, 0.035), false, 1.0)
 			var cell := Vector2i(x, y)
 			if cell == selected_cell:
 				draw_rect(rect.grow(-4), Color(0.95, 0.78, 0.31, 0.28))

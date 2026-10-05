@@ -70,6 +70,10 @@ jobs:
             --headless --path . --script res://tests/world_system_test.gd
           "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
             --headless --path . --script res://tests/final_ui_flow_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/outsider_system_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/s12_perimeter_relationship_test.gd
 
       - name: Export Windows x86_64
         shell: bash

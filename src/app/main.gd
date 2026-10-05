@@ -13,6 +13,7 @@ var context_popup: ContextPopup
 var ration_overlay: RationOverlay
 var report_panel: ReportPanel
 var outside_rail: OutsideRail
+var perimeter_view: PerimeterView
 var world_panel: WorldPanel
 var day_label: Label
 var resource_label: Label
@@ -34,6 +35,7 @@ func _ready() -> void:
 	contextual_controller = ContextualBoardController.new()
 	add_child(contextual_controller)
 	contextual_controller.setup(game_state, turn_manager, board, context_popup)
+	perimeter_view.setup(game_state, turn_manager)
 	outside_rail.setup(game_state, turn_manager)
 	world_panel.setup(game_state, turn_manager)
 	board_controller.context_requested.connect(contextual_controller.open_for_cell)
@@ -112,11 +114,13 @@ func _build_shell() -> void:
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(content)
 
+	perimeter_view = PerimeterView.new()
+	perimeter_view.custom_minimum_size = Vector2(720, 560)
+	perimeter_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	perimeter_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(perimeter_view)
 	board = BoardView.new()
-	board.custom_minimum_size = Vector2(560, 560)
-	board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	board.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(board)
+	perimeter_view.attach_board(board)
 
 	outside_rail = OutsideRail.new()
 	content.add_child(outside_rail)

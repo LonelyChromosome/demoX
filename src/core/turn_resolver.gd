@@ -13,6 +13,7 @@ var outside_system := OutsideSystem.new()
 var world_system := WorldSystem.new()
 var event_system := EventSystem.new()
 var promotion_system := PromotionSystem.new()
+var relationship_system := RelationshipSystem.new()
 var perimeter_system := PerimeterSystem.new()
 var ruin_system := RuinSystem.new()
 
@@ -37,6 +38,7 @@ enum Phase {
 
 func _init() -> void:
 	expedition_system.promotion_system = promotion_system
+	expedition_system.relationship_system = relationship_system
 
 
 func resolve(
