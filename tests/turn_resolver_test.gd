@@ -31,6 +31,7 @@ func _test_move_commit_replace_cancel_and_ghost_clear() -> void:
 		TurnResolver.Phase.COMMIT_CANCEL_CONSTRUCTION,
 		TurnResolver.Phase.COMMIT_DEMOLITION,
 		TurnResolver.Phase.COMMIT_STAFFING,
+		TurnResolver.Phase.COMMIT_OUTSIDE_ORDERS,
 		TurnResolver.Phase.RESOLVE_SYSTEMS,
 		TurnResolver.Phase.FOOD_CONSUMPTION,
 		TurnResolver.Phase.RESOLVE_EVENTS,

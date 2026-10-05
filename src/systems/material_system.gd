@@ -31,3 +31,4 @@ func produce(state: GameState, result: TurnResolutionResult) -> void:
 			continue
 		state.materials += output
 		result.materials_produced += output
+		result.workshop_materials_produced += output

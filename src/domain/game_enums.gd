@@ -11,6 +11,9 @@ enum JobRole {
 }
 enum FactConfidence { CONFIRMED, REPORTED, UNCERTAIN }
 enum PrisonerAction { RELEASE, KILL, CONTINUE, SUBMIT }
+enum ExpeditionStatus { AWAY, RETURN_PENDING, COMPLETE }
+enum OutsiderAction { START_SUPPORT, STOP_SUPPORT, ACCEPT_TRADE, REJECT_TRADE, RESETTLE }
+enum OutsidePressure { CALM, UNEASY, TENSE, RIOT }
 enum RebellionLevel {
 	NONE = -1, DISSATISFIED = 0, LOW_OUTPUT = 1, OBJECTS_BUT_OBEYS = 2, RESISTS = 3, REVOLT = 4
 }

@@ -40,6 +40,7 @@ func produce(state: GameState, result: TurnResolutionResult) -> void:
 			continue
 		state.food += output
 		result.food_produced += output
+		result.farm_food_produced += output
 
 
 func resolve_consumption(
@@ -57,6 +58,10 @@ func resolve_consumption(
 	for unit_id in candidates:
 		var unit := state.units.get(unit_id) as UnitState
 		if unit != null:
+			if unit.is_prisoner:
+				result.prisoner_food_consumed += 1
+			else:
+				result.city_food_consumed += 1
 			unit.hunger_streak = 0
 			result.fed_unit_ids.append(unit_id)
 	_cleanup_deaths(state, result, building_system)
@@ -86,6 +91,10 @@ func apply_ration(
 		if unit == null:
 			continue
 		if unit_id in selected:
+			if unit.is_prisoner:
+				result.prisoner_food_consumed += 1
+			else:
+				result.city_food_consumed += 1
 			unit.hunger_streak = 0
 			result.fed_unit_ids.append(unit_id)
 		else:
@@ -104,6 +113,8 @@ func eligible_unit_ids(state: GameState) -> Array[String]:
 			and (candidate.faction == GameEnums.Faction.PLAYER or candidate.is_prisoner)
 			and not candidate.prisoner_labor
 			and candidate.away_days_left <= 0
+			and candidate.away_assignment_id.is_empty()
+			and not candidate.return_pending
 			and consumes_food(candidate)
 		):
 			ids.append(candidate.id)

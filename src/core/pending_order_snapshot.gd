@@ -11,6 +11,12 @@ var staffing_orders: Array[SetBuildingStaffOrder] = []
 var inspect_building_order: InspectBuildingOrder
 var prisoner_labor_orders: Array[AssignPrisonerLaborOrder] = []
 var prisoner_action_orders: Array[PrisonerActionOrder] = []
+var expedition_order: DispatchExpeditionOrder
+var outsider_orders: Array[OutsiderDecisionOrder] = []
+var prisoner_labor_orders: Array[AssignPrisonerLaborOrder] = []
+var prisoner_action_orders: Array[PrisonerActionOrder] = []
+var prisoner_labor_orders: Array[AssignPrisonerLaborOrder] = []
+var prisoner_action_orders: Array[PrisonerActionOrder] = []
 var prisoner_labor_orders: Array[AssignPrisonerLaborOrder] = []
 var prisoner_action_orders: Array[PrisonerActionOrder] = []
 var prisoner_labor_orders: Array[AssignPrisonerLaborOrder] = []

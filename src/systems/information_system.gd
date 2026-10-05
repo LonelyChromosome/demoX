@@ -31,6 +31,7 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 	_append_visible_events(result, entries)
 	_append_role_changes(result, entries)
 	_append_medical_prison_events(result, entries)
+	_append_outside_events(result, entries)
 	_update_visible_building_facts(state, result, updated_keys)
 	for candidate in state.buildings.values():
 		if not (candidate is BuildingState) or candidate.phase != GameEnums.BuildingPhase.ACTIVE:
@@ -222,25 +223,42 @@ func _entry_for_building_fact(fact: KnownFact) -> ReportEntry:
 
 
 func _append_resource_entries(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
-	if result.food_produced != 0 or result.food_consumed != 0:
+	if (
+		result.food_produced != 0
+		or result.food_consumed != 0
+		or result.outsider_food_consumed != 0
+		or result.trade_food_delta != 0
+	):
+		var food_delta := (
+			result.food_produced - result.food_consumed
+			- result.outsider_food_consumed + result.trade_food_delta
+		)
 		entries.append(ReportEntry.new(
-			"Lương thực: sản xuất +%d, khẩu phần -%d, thay đổi %s%d." % [
-				result.food_produced,
-				result.food_consumed,
-				"+" if result.food_produced - result.food_consumed > 0 else "",
-				result.food_produced - result.food_consumed,
+			"Lương thực: Nông trại +%d, thám hiểm +%d, trong thành -%d, tù binh -%d, ngoài thành -%d, trao đổi %s%d; thay đổi %s%d." % [
+				result.farm_food_produced,
+				result.expedition_food_found,
+				result.city_food_consumed,
+				result.prisoner_food_consumed,
+				result.outsider_food_consumed,
+				"+" if result.trade_food_delta > 0 else "",
+				result.trade_food_delta,
+				"+" if food_delta > 0 else "",
+				food_delta,
 			],
 			result.resolved_day,
 			GameEnums.FactConfidence.CONFIRMED,
 			"Sổ kho trung tâm"
 		))
-	if result.materials_produced != 0 or result.materials_spent != 0 or result.refunded_materials != 0:
-		var delta := result.materials_produced - result.materials_spent + result.refunded_materials
+	if result.materials_produced != 0 or result.materials_spent != 0 or result.refunded_materials != 0 or result.trade_materials_delta != 0:
+		var delta := result.materials_produced - result.materials_spent + result.refunded_materials + result.trade_materials_delta
 		entries.append(ReportEntry.new(
-			"Vật tư: sản xuất +%d, chi -%d, hoàn +%d, thay đổi %s%d." % [
-				result.materials_produced,
+			"Vật tư: Xưởng +%d, thám hiểm +%d, chi -%d, hoàn +%d, trao đổi %s%d; thay đổi %s%d." % [
+				result.workshop_materials_produced,
+				result.expedition_materials_found,
 				result.materials_spent,
 				result.refunded_materials,
+				"+" if result.trade_materials_delta > 0 else "",
+				result.trade_materials_delta,
 				"+" if delta > 0 else "",
 				delta,
 			],
@@ -272,6 +290,9 @@ func _append_visible_events(result: TurnResolutionResult, entries: Array[ReportE
 			GameEnums.FactConfidence.CONFIRMED,
 			"Phân phối khẩu phần"
 		))
+	for event in result.expedition_events:
+		if event.kind == "death" and event.has("unit_id"):
+			observed.facts.erase(unit_fact_key(event.unit_id))
 
 
 func _append_role_changes(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
@@ -373,6 +394,48 @@ func _append_medical_prison_events(
 			text = "%s tiếp tục bị giam." % event.unit_name
 		entries.append(ReportEntry.new(
 			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
+		))
+
+
+func _append_medical_prison_events(
+	result: TurnResolutionResult, entries: Array[ReportEntry]
+) -> void:
+	for event in result.medical_events:
+		var text := "%s đã vào Y xá điều trị." % event.unit_name
+		if event.kind == "recovered":
+			text = "%s đã hồi phục." % event.unit_name
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Y xá"
+		))
+	for event in result.prison_events:
+		var text := "Nhà giam thiếu người canh giữ."
+		if event.kind == "admitted":
+			text = "%s đã được đưa vào Nhà giam." % event.unit_name
+		elif event.kind == "labor":
+			text = "%s đã lao động hỗ trợ xây dựng." % event.unit_name
+		elif event.kind == "released":
+			text = "%s đã được thả." % event.unit_name
+		elif event.kind == "killed":
+			text = "%s đã bị xử lý." % event.unit_name
+		elif event.kind == "submitted":
+			text = "%s đã quy phục và trở thành Tốt." % event.unit_name
+		elif event.kind == "continued":
+			text = "%s tiếp tục bị giam." % event.unit_name
+		entries.append(ReportEntry.new(
+			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
+		))
+
+
+func _append_outside_events(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
+	for event in result.expedition_events:
+		entries.append(ReportEntry.new(
+			event.text, result.resolved_day,
+			GameEnums.FactConfidence.CONFIRMED, "Ngoài thành"
+		))
+	for event in result.outsider_events:
+		entries.append(ReportEntry.new(
+			event.text, result.resolved_day,
+			GameEnums.FactConfidence.CONFIRMED, "Ngoài thành"
 		))
 
 
@@ -532,7 +595,7 @@ func _add_special_building_values(
 func _true_unit_condition(unit: UnitState) -> String:
 	if unit.locked_by_healing:
 		return "đang điều trị"
-	if unit.away_days_left > 0:
+	if unit.away_days_left > 0 or not unit.away_assignment_id.is_empty():
 		return "đang đi xa"
 	if unit.locked_by_construction:
 		return "đang tham gia xây dựng"

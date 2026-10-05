@@ -15,6 +15,7 @@ var resolver := TurnResolver.new()
 var building_system := BuildingSystem.new()
 var information_system := InformationSystem.new()
 var prison_system := PrisonSystem.new()
+var expedition_system := ExpeditionSystem.new()
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult
@@ -112,6 +113,56 @@ func request_prisoner_escape(unit_id: String) -> bool:
 
 func request_prisoner_submission(unit_id: String) -> bool:
 	return prison_system.request_submission(state, unit_id)
+
+
+func queue_expedition(unit_ids: Array[String]) -> DispatchExpeditionOrder:
+	if not can_edit_orders() or not expedition_system.can_dispatch(unit_ids):
+		return null
+	return order_queue.plan_expedition(_next_expedition_id(), unit_ids, state.day)
+
+
+func cancel_expedition() -> void:
+	if can_edit_orders():
+		order_queue.cancel_expedition()
+
+
+func get_planned_expedition() -> DispatchExpeditionOrder:
+	return order_queue.get_expedition()
+
+
+func queue_outsider_action(
+	group_id: String,
+	action: GameEnums.OutsiderAction,
+	escort_unit_ids: Array[String] = []
+) -> OutsiderDecisionOrder:
+	if not can_edit_orders() or not state.outsider_groups.has(group_id):
+		return null
+	if (
+		action == GameEnums.OutsiderAction.RESETTLE
+		and (
+			escort_unit_ids.size() != OutsideSystem.ESCORT_COUNT
+			or escort_unit_ids[0] == escort_unit_ids[1]
+		)
+	):
+		return null
+	var king_id := ""
+	if action in [GameEnums.OutsiderAction.ACCEPT_TRADE, GameEnums.OutsiderAction.REJECT_TRADE]:
+		var king := _player_king()
+		if king == null:
+			return null
+		king_id = king.id
+	return order_queue.plan_outsider_decision(
+		group_id, action, escort_unit_ids, king_id, state.day
+	)
+
+
+func cancel_outsider_action(group_id: String) -> void:
+	if can_edit_orders():
+		order_queue.cancel_outsider_decision(group_id)
+
+
+func get_planned_outsider_action(group_id: String) -> OutsiderDecisionOrder:
+	return order_queue.get_outsider_decision(group_id)
 
 
 func cancel_move(unit_id: String) -> void:
@@ -348,7 +399,7 @@ func plan_job_drop(unit_id: String, cell: Vector2i) -> bool:
 		GameEnums.JobRole.PRISON_MANAGER,
 		GameEnums.JobRole.PRISON_GUARD,
 	]:
-		if unit.locked_by_construction or unit.locked_by_healing or unit.away_days_left > 0:
+		if not unit.can_be_moved():
 			return false
 		if role == GameEnums.JobRole.TREATMENT and not unit.injured:
 			return false
@@ -511,7 +562,7 @@ func _complete_resolution(result: TurnResolutionResult) -> void:
 
 
 func can_edit_orders() -> bool:
-	return state != null and not is_resolving
+	return state != null and not is_resolving and not state.game_over
 
 
 func has_pending_move(unit_id: String) -> bool:
@@ -592,6 +643,15 @@ func _next_building_id() -> String:
 	while state.buildings.has(candidate) or order_queue.get_building(candidate) != null:
 		index += 1
 		candidate = "building_%d" % index
+	return candidate
+
+
+func _next_expedition_id() -> String:
+	var index := state.expeditions.size() + 1
+	var candidate := "expedition_%d" % index
+	while state.expeditions.has(candidate):
+		index += 1
+		candidate = "expedition_%d" % index
 	return candidate
 
 

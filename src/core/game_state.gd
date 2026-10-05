@@ -8,12 +8,17 @@ var day := 1
 var food := 0
 var materials := 0
 var city_state: GameEnums.CityState = GameEnums.CityState.MEDIUM
+var run_seed := 80232
 
 var units: Dictionary = {}
 var buildings: Dictionary = {}
 var prisoners: Array[String] = []
 var outsiders_count := 0
 var outsider_unrest := 0
+var expeditions: Dictionary = {}
+var outsider_groups: Dictionary = {}
+var game_over := false
+var failure_reason := ""
 
 var day_one_full_knowledge := true
 var active_event_id := ""

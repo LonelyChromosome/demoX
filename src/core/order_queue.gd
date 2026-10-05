@@ -16,6 +16,8 @@ var _planned_builder_cells: Dictionary = {}
 var _inspect_building_order: InspectBuildingOrder
 var _prisoner_labor_orders: Dictionary = {}
 var _prisoner_action_orders: Dictionary = {}
+var _expedition_order: DispatchExpeditionOrder
+var _outsider_orders: Dictionary = {}
 
 
 func plan_move(
@@ -82,6 +84,46 @@ func plan_prisoner_action(
 func cancel_prisoner_action(prisoner_id: String) -> void:
 	if _prisoner_action_orders.erase(prisoner_id):
 		changed.emit()
+
+
+func plan_expedition(
+	expedition_id: String, unit_ids: Array[String], day: int
+) -> DispatchExpeditionOrder:
+	_expedition_order = DispatchExpeditionOrder.new(expedition_id, unit_ids, day)
+	changed.emit()
+	return _expedition_order
+
+
+func cancel_expedition() -> void:
+	if _expedition_order != null:
+		_expedition_order = null
+		changed.emit()
+
+
+func get_expedition() -> DispatchExpeditionOrder:
+	return _expedition_order
+
+
+func plan_outsider_decision(
+	group_id: String,
+	action: GameEnums.OutsiderAction,
+	escort_unit_ids: Array[String],
+	king_unit_id: String,
+	day: int
+) -> OutsiderDecisionOrder:
+	var order := OutsiderDecisionOrder.new(group_id, action, escort_unit_ids, king_unit_id, day)
+	_outsider_orders[group_id] = order
+	changed.emit()
+	return order
+
+
+func cancel_outsider_decision(group_id: String) -> void:
+	if _outsider_orders.erase(group_id):
+		changed.emit()
+
+
+func get_outsider_decision(group_id: String) -> OutsiderDecisionOrder:
+	return _outsider_orders.get(group_id) as OutsiderDecisionOrder
 
 
 func move_targets() -> Dictionary:
@@ -277,6 +319,14 @@ func snapshot() -> PendingOrderSnapshot:
 		result.demolish_building_order = _demolish_building_order.copy()
 	if _inspect_building_order != null:
 		result.inspect_building_order = _inspect_building_order.copy()
+	if _expedition_order != null:
+		result.expedition_order = _expedition_order.copy()
+	var outsider_group_ids := _outsider_orders.keys()
+	outsider_group_ids.sort()
+	for group_id in outsider_group_ids:
+		result.outsider_orders.append(
+			(_outsider_orders[group_id] as OutsiderDecisionOrder).copy()
+		)
 	var prisoner_ids := _prisoner_labor_orders.keys()
 	prisoner_ids.sort()
 	for prisoner_id in prisoner_ids:
@@ -310,6 +360,8 @@ func clear() -> void:
 	_cancel_construction_order = null
 	_demolish_building_order = null
 	_inspect_building_order = null
+	_expedition_order = null
+	_outsider_orders.clear()
 	_prisoner_labor_orders.clear()
 	_prisoner_action_orders.clear()
 	_staffing_orders.clear()
@@ -328,6 +380,8 @@ func is_empty() -> bool:
 		and _cancel_construction_order == null
 		and _demolish_building_order == null
 		and _inspect_building_order == null
+		and _expedition_order == null
+		and _outsider_orders.is_empty()
 		and _prisoner_labor_orders.is_empty()
 		and _prisoner_action_orders.is_empty()
 		and _staffing_orders.is_empty()

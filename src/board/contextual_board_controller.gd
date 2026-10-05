@@ -281,18 +281,18 @@ func _unit_detail(unit: UnitState) -> String:
 	var inspection := turn_manager.get_planned_inspection()
 	if inspection != null and inspection.king_unit_id == unit.id:
 		planned_text += "\nDự kiến: kiểm tra trực tiếp công trình vào cuối ngày"
-	var backstory := "Chưa có dữ kiện."
-	if not unit.backstory.is_empty():
-		backstory = "\n".join(unit.backstory)
-	elif not unit.memories.is_empty():
-		backstory = "\n".join(unit.memories)
-	return "Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n\nQUÁ KHỨ\n%s" % [
+	var story_lines: Array[String] = unit.backstory.duplicate()
+	var first_memory := maxi(0, unit.memories.size() - 4)
+	for index in range(first_memory, unit.memories.size()):
+		story_lines.append(unit.memories[index])
+	var story := "Chưa có dữ kiện." if story_lines.is_empty() else "\n".join(story_lines)
+	return "Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n\nQUÁ KHỨ & KÝ ỨC\n%s" % [
 		_rank_name(unit.rank),
 		_faction_name(unit.faction),
 		_cell_name(unit.board_cell),
 		planned_text,
 		turn_manager.information_system.unit_condition_detail(state, unit),
-		backstory,
+		story,
 	]
 
 

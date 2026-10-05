@@ -21,6 +21,9 @@ var is_manager := false
 var locked_by_construction := false
 var locked_by_healing := false
 var away_days_left := 0
+var away_assignment_id := ""
+var away_reason := ""
+var return_pending := false
 
 var is_prisoner := false
 var prison_building_id := ""
@@ -35,6 +38,7 @@ var food_brought_home := 0
 var materials_brought_home := 0
 var memories: Array[String] = []
 var backstory: Array[String] = []
+var memory_tags: Array[Dictionary] = []
 
 func _init(unit_id := "") -> void:
 	id = unit_id
@@ -43,7 +47,13 @@ func is_in_city_roster() -> bool:
 	return faction == GameEnums.Faction.PLAYER and not is_prisoner
 
 func can_be_moved() -> bool:
-	return not locked_by_construction and not locked_by_healing and away_days_left <= 0
+	return (
+		not locked_by_construction
+		and not locked_by_healing
+		and away_days_left <= 0
+		and away_assignment_id.is_empty()
+		and not return_pending
+	)
 
 func can_be_builder() -> bool:
 	return (
@@ -54,4 +64,6 @@ func can_be_builder() -> bool:
 		and not locked_by_construction
 		and not locked_by_healing
 		and away_days_left <= 0
+		and away_assignment_id.is_empty()
+		and not return_pending
 	)

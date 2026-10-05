@@ -165,6 +165,8 @@ func _is_valid_farm_person(candidate: Variant) -> bool:
 		and not candidate.locked_by_construction
 		and not candidate.locked_by_healing
 		and candidate.away_days_left <= 0
+		and candidate.away_assignment_id.is_empty()
+		and not candidate.return_pending
 	)
 
 
@@ -403,7 +405,12 @@ func _validate_unit(
 		return {"valid": false, "reason": "Vua không được làm quản lý"}
 	if unit.locked_by_construction:
 		return {"valid": false, "reason": "Quân đang bị khóa vì xây dựng"}
-	if unit.locked_by_healing or unit.away_days_left > 0:
+	if (
+		unit.locked_by_healing
+		or unit.away_days_left > 0
+		or not unit.away_assignment_id.is_empty()
+		or unit.return_pending
+	):
 		return {"valid": false, "reason": "Quân hiện không thể nhận công việc"}
 	if not is_operational_square(building, unit.board_cell):
 		return {"valid": false, "reason": "Quân phải đứng trong vùng vận hành"}

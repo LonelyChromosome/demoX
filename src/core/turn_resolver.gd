@@ -8,6 +8,8 @@ var material_system := MaterialSystem.new()
 var staffing_system := StaffingSystem.new()
 var medical_system := MedicalSystem.new()
 var prison_system := PrisonSystem.new()
+var expedition_system := ExpeditionSystem.new()
+var outside_system := OutsideSystem.new()
 
 enum Phase {
 	VALIDATE_ORDERS,
@@ -16,6 +18,7 @@ enum Phase {
 	COMMIT_CANCEL_CONSTRUCTION,
 	COMMIT_DEMOLITION,
 	COMMIT_STAFFING,
+	COMMIT_OUTSIDE_ORDERS,
 	RESOLVE_SYSTEMS,
 	FOOD_CONSUMPTION,
 	RESOLVE_EVENTS,
@@ -42,6 +45,21 @@ func resolve(
 	var valid_demolition := _validate_demolition(
 		state, snapshot.demolish_building_order, building_system, result
 	)
+	var blocked_unit_ids := _blocked_unit_ids(snapshot)
+	var reserved_away_unit_ids := {}
+	var valid_expedition := (
+		snapshot.expedition_order != null
+		and expedition_system.validate_order(
+			state, snapshot.expedition_order, blocked_unit_ids,
+			reserved_away_unit_ids, result
+		)
+	)
+	var valid_outside_orders: Array[OutsiderDecisionOrder] = []
+	for outside_order in snapshot.outsider_orders:
+		if outside_system.validate_order(
+			state, outside_order, blocked_unit_ids, reserved_away_unit_ids, result
+		):
+			valid_outside_orders.append(outside_order)
 
 	_run_phase(Phase.COMMIT_MOVEMENT, result)
 	_commit_moves(state, valid_moves, result)
@@ -63,6 +81,12 @@ func resolve(
 	staffing_system.commit(state, valid_staffing, result)
 	prison_system.commit_actions(state, snapshot.prisoner_action_orders, result)
 	prison_system.commit_labor(state, snapshot.prisoner_labor_orders, result)
+
+	_run_phase(Phase.COMMIT_OUTSIDE_ORDERS, result)
+	if valid_expedition:
+		expedition_system.commit(state, snapshot.expedition_order, result)
+	for outside_order in valid_outside_orders:
+		outside_system.commit_order(state, outside_order, result)
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
@@ -96,6 +120,12 @@ func _finish_resolution(
 ) -> void:
 	_run_phase(Phase.RESOLVE_EVENTS, result)
 	_resolve_events(state, result)
+	var skip_groups := {}
+	for group_id in result.new_outsider_group_ids:
+		skip_groups[group_id] = true
+	for group_id in result.resettlement_started_group_ids:
+		skip_groups[group_id] = true
+	outside_system.resolve_daily(state, skip_groups, result)
 	_run_phase(Phase.RESOLVE_INFORMATION, result)
 	_capture_inspection(state, snapshot, building_system, result)
 
@@ -105,7 +135,7 @@ func _finish_resolution(
 	_run_phase(Phase.FINALIZE_DAY, result)
 	prison_system.finalize_day(state)
 	state.day_one_full_knowledge = false
-	if state.day < GameState.MAX_DAYS:
+	if not state.game_over and state.day < GameState.MAX_DAYS:
 		state.day += 1
 	result.next_day = state.day
 
@@ -354,6 +384,31 @@ func _resolve_systems(
 	medical_system.sync_and_advance(state, result)
 	food_system.produce(state, result)
 	material_system.produce(state, result)
+	var skip_expeditions := {}
+	for expedition_id in result.committed_expedition_ids:
+		skip_expeditions[expedition_id] = true
+	expedition_system.advance(state, skip_expeditions, result)
+
+
+func _blocked_unit_ids(snapshot: PendingOrderSnapshot) -> Dictionary:
+	var blocked := {}
+	for order in snapshot.move_orders:
+		blocked[order.unit_id] = true
+	for order in snapshot.building_orders:
+		for unit_id in order.builder_unit_ids:
+			blocked[unit_id] = true
+	for order in snapshot.assign_builder_orders:
+		blocked[order.unit_id] = true
+	for order in snapshot.remove_builder_orders:
+		blocked[order.unit_id] = true
+	for order in snapshot.staffing_orders:
+		if not order.manager_unit_id.is_empty():
+			blocked[order.manager_unit_id] = true
+		for unit_id in order.worker_unit_ids:
+			blocked[unit_id] = true
+	if snapshot.inspect_building_order != null:
+		blocked[snapshot.inspect_building_order.king_unit_id] = true
+	return blocked
 
 func _validate_cancel(
 	state: GameState, order: CancelConstructionOrder, result: TurnResolutionResult
