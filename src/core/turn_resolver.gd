@@ -157,6 +157,7 @@ func _finish_resolution(
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
+	_apply_loyalty_outcomes(state, result)
 	var skip_groups := {}
 	for group_id in result.new_outsider_group_ids:
 		skip_groups[group_id] = true
@@ -182,6 +183,29 @@ func _finish_resolution(
 
 	_run_phase(Phase.START_NEXT_DAY, result)
 	_start_next_day(state, result)
+
+
+func _apply_loyalty_outcomes(
+	state: GameState, result: TurnResolutionResult
+) -> void:
+	for unit_id in result.unfed_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		loyalty_system.adjust_loyalty(
+			state, unit.id, -1, state.day,
+			"Phân phối khẩu phần", "không được cấp lương thực",
+			"loyalty:hunger:%d:%s" % [state.day, unit.id], result
+		)
+	for unit_id in result.promoted_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null or unit.faction != GameEnums.Faction.PLAYER:
+			continue
+		loyalty_system.adjust_loyalty(
+			state, unit.id, 1, state.day,
+			"Barracks", "được thăng cấp",
+			"loyalty:promotion:%d:%s" % [state.day, unit.id], result
+		)
 
 
 func _validate_moves(
