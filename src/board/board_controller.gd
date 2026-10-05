@@ -51,7 +51,10 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 	var unit := _player_unit_at(cell)
 	if unit != null:
 		selected_unit_id = unit.id
-		if turn_manager.has_pending_move(unit.id):
+		if (
+			turn_manager.has_pending_move(unit.id)
+			or turn_manager.has_planned_inspection_for_unit(unit.id)
+		):
 			dragged_unit_id = ""
 		else:
 			dragged_unit_id = unit.id
