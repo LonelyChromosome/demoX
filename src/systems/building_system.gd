@@ -58,6 +58,7 @@ func assign_construction(building: BuildingState, builder_ids: Array[String]) ->
 		if not builder_ids.is_empty()
 		else GameEnums.BuildingPhase.BLUEPRINT
 	)
+	building.accelerated_by_builders = builder_ids.size() >= 2
 
 
 func advance_construction(state: GameState, skip_ids: Dictionary = {}) -> Array[String]:
@@ -150,6 +151,10 @@ func validate_demolition(state: GameState, building_id: String) -> Dictionary:
 		return {"valid": false, "reason": "Công trình không tồn tại"}
 	if building.phase != GameEnums.BuildingPhase.ACTIVE:
 		return {"valid": false, "reason": "Chỉ được phá công trình đã hoàn thành"}
+	if building.type == GameEnums.BuildingType.PRISON and not building.prisoner_unit_ids.is_empty():
+		return {"valid": false, "reason": "Phải xử lý hết tù binh trước khi phá Nhà giam"}
+	if building.type == GameEnums.BuildingType.INFIRMARY and not building.patient_unit_ids.is_empty():
+		return {"valid": false, "reason": "Y xá vẫn còn bệnh nhân"}
 	return {"valid": true, "reason": "Có thể phá"}
 
 func start_demolition(state: GameState, building_id: String) -> bool:
