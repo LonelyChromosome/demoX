@@ -115,10 +115,14 @@ func request_prisoner_submission(unit_id: String) -> bool:
 	return prison_system.request_submission(state, unit_id)
 
 
-func queue_expedition(unit_ids: Array[String]) -> DispatchExpeditionOrder:
+func queue_expedition(
+	unit_ids: Array[String], target_region_id := "", supplies_food := 0
+) -> DispatchExpeditionOrder:
 	if not can_edit_orders() or not expedition_system.can_dispatch(unit_ids):
 		return null
-	return order_queue.plan_expedition(_next_expedition_id(), unit_ids, state.day)
+	return order_queue.plan_expedition(
+		_next_expedition_id(), unit_ids, state.day, target_region_id, supplies_food
+	)
 
 
 func cancel_expedition() -> void:

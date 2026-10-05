@@ -13,11 +13,14 @@ var context_popup: ContextPopup
 var ration_overlay: RationOverlay
 var report_panel: ReportPanel
 var outside_rail: OutsideRail
+var world_panel: WorldPanel
 var day_label: Label
 var resource_label: Label
+var world_indicator_label: Label
 var visual_transition := false
 var status_label: Label
 var resource_delta_label: Label
+var world_system := WorldSystem.new()
 
 
 func _ready() -> void:
@@ -32,6 +35,7 @@ func _ready() -> void:
 	add_child(contextual_controller)
 	contextual_controller.setup(game_state, turn_manager, board, context_popup)
 	outside_rail.setup(game_state, turn_manager)
+	world_panel.setup(game_state, turn_manager)
 	board_controller.context_requested.connect(contextual_controller.open_for_cell)
 	board_controller.view_changed.connect(contextual_controller.refresh)
 	board.resolution_animation_finished.connect(_on_resolution_animation_finished)
@@ -72,6 +76,9 @@ func _build_shell() -> void:
 	resource_delta_label = Label.new()
 	resource_delta_label.add_theme_color_override("font_color", Color("79d8a5"))
 	top.add_child(resource_delta_label)
+	world_indicator_label = Label.new()
+	world_indicator_label.add_theme_color_override("font_color", Color("9bb7c7"))
+	top.add_child(world_indicator_label)
 	status_label = Label.new()
 	status_label.add_theme_color_override("font_color", Color("d9b86c"))
 	top.add_child(status_label)
@@ -90,6 +97,11 @@ func _build_shell() -> void:
 	report_button.text = "Báo cáo"
 	report_button.pressed.connect(_toggle_report)
 	top.add_child(report_button)
+
+	var world_button := Button.new()
+	world_button.text = "Thế giới"
+	world_button.pressed.connect(_toggle_world)
+	top.add_child(world_button)
 
 	var end_button := Button.new()
 	end_button.text = "Kết thúc ngày"
@@ -121,6 +133,8 @@ func _build_shell() -> void:
 
 	report_panel = ReportPanel.new()
 	add_child(report_panel)
+	world_panel = WorldPanel.new()
+	add_child(world_panel)
 
 	context_popup = ContextPopup.new()
 	add_child(context_popup)
@@ -168,6 +182,13 @@ func _toggle_report() -> void:
 	report_panel.open_latest()
 
 
+func _toggle_world() -> void:
+	if world_panel.visible:
+		world_panel.close()
+	else:
+		world_panel.open()
+
+
 func _end_day() -> void:
 	if not visual_transition and not game_state.game_over and game_state.day < GameState.MAX_DAYS:
 		visual_transition = true
@@ -208,7 +229,8 @@ func _on_resolution_animation_finished() -> void:
 func _show_resource_delta(result: TurnResolutionResult) -> void:
 	var food_delta := (
 		result.food_produced - result.food_consumed
-		- result.outsider_food_consumed + result.trade_food_delta
+		- result.outsider_food_consumed - result.expedition_supply_food
+		+ result.trade_food_delta
 	)
 	var material_delta := (
 		result.materials_produced - result.materials_spent
@@ -233,6 +255,11 @@ func _refresh_header() -> void:
 	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
 	# Kho trung tâm là thông tin player quản lý trực tiếp, nên header được phép hiện số chính xác.
 	resource_label.text = "   Lương thực %d   ·   Vật tư %d" % [game_state.food, game_state.materials]
+	var world := world_system.ensure_initialized(game_state)
+	world_indicator_label.text = "   Mùa %s · %s" % [
+		world_system.season_label(world.season),
+		world_system.weather_label(world.weather),
+	]
 	board.set_day(game_state.day, game_state.day > 1)
 
 

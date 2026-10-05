@@ -51,6 +51,8 @@ var prisoner_food_consumed := 0
 var outsider_food_consumed := 0
 var trade_food_delta := 0
 var trade_materials_delta := 0
+var expedition_supply_food := 0
+var world_events: Array[String] = []
 var rejected_orders: Array[Dictionary] = []
 
 

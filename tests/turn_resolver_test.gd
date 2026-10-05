@@ -35,6 +35,7 @@ func _test_move_commit_replace_cancel_and_ghost_clear() -> void:
 		TurnResolver.Phase.RESOLVE_SYSTEMS,
 		TurnResolver.Phase.FOOD_CONSUMPTION,
 		TurnResolver.Phase.RESOLVE_EVENTS,
+		TurnResolver.Phase.RESOLVE_WORLD,
 		TurnResolver.Phase.RESOLVE_INFORMATION,
 		TurnResolver.Phase.FINALIZE_DEMOLITION,
 		TurnResolver.Phase.FINALIZE_DAY,

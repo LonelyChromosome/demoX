@@ -87,9 +87,12 @@ func cancel_prisoner_action(prisoner_id: String) -> void:
 
 
 func plan_expedition(
-	expedition_id: String, unit_ids: Array[String], day: int
+	expedition_id: String, unit_ids: Array[String], day: int,
+	target_region_id := "", supplies_food := 0
 ) -> DispatchExpeditionOrder:
-	_expedition_order = DispatchExpeditionOrder.new(expedition_id, unit_ids, day)
+	_expedition_order = DispatchExpeditionOrder.new(
+		expedition_id, unit_ids, day, target_region_id, supplies_food
+	)
 	changed.emit()
 	return _expedition_order
 

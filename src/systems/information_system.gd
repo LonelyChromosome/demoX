@@ -32,6 +32,7 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 	_append_role_changes(result, entries)
 	_append_medical_prison_events(result, entries)
 	_append_outside_events(result, entries)
+	_append_world_events(result, entries)
 	_update_visible_building_facts(state, result, updated_keys)
 	for candidate in state.buildings.values():
 		if not (candidate is BuildingState) or candidate.phase != GameEnums.BuildingPhase.ACTIVE:
@@ -227,19 +228,22 @@ func _append_resource_entries(result: TurnResolutionResult, entries: Array[Repor
 		result.food_produced != 0
 		or result.food_consumed != 0
 		or result.outsider_food_consumed != 0
+		or result.expedition_supply_food != 0
 		or result.trade_food_delta != 0
 	):
 		var food_delta := (
 			result.food_produced - result.food_consumed
-			- result.outsider_food_consumed + result.trade_food_delta
+			- result.outsider_food_consumed - result.expedition_supply_food
+			+ result.trade_food_delta
 		)
 		entries.append(ReportEntry.new(
-			"Lương thực: Nông trại +%d, thám hiểm +%d, trong thành -%d, tù binh -%d, ngoài thành -%d, trao đổi %s%d; thay đổi %s%d." % [
+			"Lương thực: Nông trại +%d, thám hiểm +%d, trong thành -%d, tù binh -%d, ngoài thành -%d, chuẩn bị đường xa -%d, trao đổi %s%d; thay đổi %s%d." % [
 				result.farm_food_produced,
 				result.expedition_food_found,
 				result.city_food_consumed,
 				result.prisoner_food_consumed,
 				result.outsider_food_consumed,
+				result.expedition_supply_food,
 				"+" if result.trade_food_delta > 0 else "",
 				result.trade_food_delta,
 				"+" if food_delta > 0 else "",
@@ -436,6 +440,14 @@ func _append_outside_events(result: TurnResolutionResult, entries: Array[ReportE
 		entries.append(ReportEntry.new(
 			event.text, result.resolved_day,
 			GameEnums.FactConfidence.CONFIRMED, "Ngoài thành"
+		))
+
+
+func _append_world_events(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
+	for event_text in result.world_events:
+		entries.append(ReportEntry.new(
+			event_text, result.resolved_day,
+			GameEnums.FactConfidence.REPORTED, "Tin ngoài thành"
 		))
 
 

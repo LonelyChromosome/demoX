@@ -154,6 +154,10 @@ func _commit_trade(state: GameState, group: OutsiderGroupState, accepted: bool, 
 		state.materials += quantity
 		result.trade_materials_delta += quantity
 	group.history_tags.append({"kind": "trade_accepted", "day": state.day, "quantity": quantity})
+	var region := _region_for_group(state, group)
+	if region != null:
+		region.presence = maxi(region.presence, GameEnums.RegionPresence.CONNECTED)
+		region.remember("trade", state.world_state.world_turn, {"group_id": group.id})
 	result.outsider_events.append({
 		"kind": "trade_accepted",
 		"text": "%s đổi %d %s lấy %d %s. Vua đã chấp thuận." % [
@@ -180,6 +184,10 @@ func _start_resettlement(state: GameState, group: OutsiderGroupState, escort_ids
 		unit.memory_tags.append({"kind": "resettlement_escort", "day": state.day, "group_id": group.id})
 		unit.memories.append("Đã hộ tống %s đi tái định cư vào Ngày %d." % [group.name, state.day])
 	group.history_tags.append({"kind": "resettlement_started", "day": state.day})
+	var region := _region_for_group(state, group)
+	if region != null:
+		region.presence = maxi(region.presence, GameEnums.RegionPresence.CONNECTED)
+		region.remember("resettlement", state.world_state.world_turn, {"group_id": group.id})
 	result.resettlement_started_group_ids.append(group.id)
 	result.outsider_events.append({"kind": "resettlement_started", "text": "Hai quân đã hộ tống %s đi tái định cư." % group.name})
 
@@ -223,3 +231,13 @@ func _continue_resettlement(state: GameState, group: OutsiderGroupState, skip: b
 	result.outsider_events.append({"kind": "resettled", "text": "%s đã được tái định cư an toàn. Hai quân hộ tống đã trở về." % group.name})
 	state.remember("%s đã được tái định cư an toàn." % group.name, "resettled")
 	state.outsider_groups.erase(group.id)
+
+
+func _region_for_group(state: GameState, group: OutsiderGroupState) -> RegionState:
+	var world := WorldSystem.new().ensure_initialized(state)
+	if group.region_id.is_empty():
+		for region_id in world.known_regions:
+			if region_id != WorldSystem.CITY_REGION_ID:
+				group.region_id = region_id
+				break
+	return world.regions.get(group.region_id) as RegionState

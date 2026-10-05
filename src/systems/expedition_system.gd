@@ -16,12 +16,14 @@ const OUTCOME_OUTSIDERS := "outsiders"
 const OUTCOME_INJURY := "injury"
 const OUTCOME_DEATH := "death"
 
+var world_system := WorldSystem.new()
+
 
 func can_dispatch(unit_ids: Array[String]) -> bool:
 	return unit_ids.size() == TEAM_SIZE and unit_ids[0] != unit_ids[1]
 
 
-func context_weights(state: GameState) -> Dictionary:
+func context_weights(state: GameState, expedition: ExpeditionState = null) -> Dictionary:
 	var weights := {
 		OUTCOME_FOOD: 1.0,
 		OUTCOME_MATERIALS: 1.0,
@@ -34,6 +36,15 @@ func context_weights(state: GameState) -> Dictionary:
 		weights[OUTCOME_FOOD] = 2.2
 	if state.materials < LOW_MATERIAL_THRESHOLD:
 		weights[OUTCOME_MATERIALS] = 1.8
+	var world := world_system.ensure_initialized(state)
+	if world.food_pressure >= GameEnums.ResourcePressure.STRAINED:
+		weights[OUTCOME_FOOD] = float(weights[OUTCOME_FOOD]) + 0.45
+	if world.material_pressure >= GameEnums.ResourcePressure.STRAINED:
+		weights[OUTCOME_MATERIALS] = float(weights[OUTCOME_MATERIALS]) + 0.35
+	if expedition != null:
+		var modifiers := world_system.expedition_weight_modifiers(state, expedition)
+		for kind in weights:
+			weights[kind] = maxf(0.02, float(weights[kind]) + float(modifiers.get(kind, 0.0)))
 	return weights
 
 
@@ -46,6 +57,18 @@ func validate_order(
 ) -> bool:
 	if order == null or not can_dispatch(order.unit_ids):
 		result.reject("expedition", order.expedition_id if order != null else "", "Đoàn thám hiểm cần đúng 2 quân")
+		return false
+	var world := world_system.ensure_initialized(state)
+	var region := world_system.target_region(world, order.target_region_id)
+	if region == null or region.id not in world.known_regions:
+		result.reject("expedition", order.expedition_id, "Vùng đích chưa được biết tới")
+		return false
+	var route := world_system.route_to_region(world, region.id)
+	if route != null and route.blocked:
+		result.reject("expedition", order.expedition_id, "Tuyến đường tới vùng này đang bị chặn")
+		return false
+	if order.supplies_food > state.food:
+		result.reject("expedition", order.expedition_id, "Không đủ Lương thực chuẩn bị cho chuyến đi")
 		return false
 	for unit_id in order.unit_ids:
 		if blocked_unit_ids.has(unit_id) or reserved_unit_ids.has(unit_id):
@@ -64,10 +87,26 @@ func commit(state: GameState, order: DispatchExpeditionOrder, result: TurnResolu
 	var expedition := ExpeditionState.new(order.expedition_id)
 	expedition.unit_ids = order.unit_ids.duplicate()
 	expedition.departure_day = state.day
-	expedition.duration_days = _duration_for(state.run_seed, expedition.id, state.day)
+	var world := world_system.ensure_initialized(state)
+	var region := world_system.target_region(world, order.target_region_id)
+	expedition.target_region_id = region.id if region != null else WorldSystem.CITY_REGION_ID
+	var route := world_system.route_to_region(world, expedition.target_region_id)
+	expedition.route_id = route.id if route != null else ""
+	expedition.supplies_food = mini(order.supplies_food, state.food)
+	state.food -= expedition.supplies_food
+	result.expedition_supply_food += expedition.supplies_food
+	var base_duration := _duration_for(state.run_seed, expedition.id, state.day)
+	expedition.duration_days = clampi(
+		base_duration + world_system.expedition_duration_modifier(
+			world, expedition.target_region_id
+		) - mini(1, expedition.supplies_food),
+		MIN_DURATION_DAYS,
+		MAX_DURATION_DAYS
+	)
 	expedition.days_left = expedition.duration_days
 	expedition.outcome_kind = choose_outcome(
-		context_weights(state), _stable_seed(state.run_seed, expedition.id, state.day, "outcome")
+		context_weights(state, expedition),
+		_stable_seed(state.run_seed, expedition.id, state.day, "outcome")
 	)
 	expedition.reward_amount = MIN_RESOURCE_REWARD + (
 		_stable_seed(state.run_seed, expedition.id, state.day, "reward")
@@ -93,7 +132,9 @@ func commit(state: GameState, order: DispatchExpeditionOrder, result: TurnResolu
 	result.committed_expedition_ids.append(expedition.id)
 	result.expedition_events.append({
 		"kind": "departed",
-		"text": "%s đã rời thành. Những vị trí họ để lại nay bỏ trống." % _team_names(state, expedition.unit_ids),
+		"text": "%s đã rời thành hướng tới %s. Những vị trí họ để lại nay bỏ trống." % [
+			_team_names(state, expedition.unit_ids), region.name if region != null else "vùng chưa rõ",
+		],
 	})
 	return expedition
 
@@ -197,6 +238,7 @@ func _apply_outcome(state: GameState, expedition: ExpeditionState, result: TurnR
 	else:
 		result.expedition_events.append({"kind": "empty", "text": "%s trở về tay trắng." % _team_names(state, expedition.unit_ids)})
 		_add_memory(state, expedition, "expedition_survived")
+	world_system.record_expedition_result(state, expedition, result)
 
 
 func _attempt_return(state: GameState, expedition: ExpeditionState, result: TurnResolutionResult) -> void:

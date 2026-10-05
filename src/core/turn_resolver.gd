@@ -10,6 +10,7 @@ var medical_system := MedicalSystem.new()
 var prison_system := PrisonSystem.new()
 var expedition_system := ExpeditionSystem.new()
 var outside_system := OutsideSystem.new()
+var world_system := WorldSystem.new()
 
 enum Phase {
 	VALIDATE_ORDERS,
@@ -22,6 +23,7 @@ enum Phase {
 	RESOLVE_SYSTEMS,
 	FOOD_CONSUMPTION,
 	RESOLVE_EVENTS,
+	RESOLVE_WORLD,
 	RESOLVE_INFORMATION,
 	FINALIZE_DEMOLITION,
 	FINALIZE_DAY,
@@ -126,6 +128,8 @@ func _finish_resolution(
 	for group_id in result.resettlement_started_group_ids:
 		skip_groups[group_id] = true
 	outside_system.resolve_daily(state, skip_groups, result)
+	_run_phase(Phase.RESOLVE_WORLD, result)
+	world_system.resolve_world(state, result)
 	_run_phase(Phase.RESOLVE_INFORMATION, result)
 	_capture_inspection(state, snapshot, building_system, result)
 

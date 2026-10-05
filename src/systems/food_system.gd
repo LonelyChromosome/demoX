@@ -28,7 +28,9 @@ func production_for_building(state: GameState, building: BuildingState) -> int:
 		return 0
 	if building.type != GameEnums.BuildingType.FARM:
 		return 0
-	return farm_output(farm_staff_count(state, building))
+	var base_output := farm_output(farm_staff_count(state, building))
+	var season_modifier := WorldSystem.new().food_production_multiplier(state.world_state)
+	return maxi(1, int(floor(float(base_output) * season_modifier)))
 
 
 func produce(state: GameState, result: TurnResolutionResult) -> void:

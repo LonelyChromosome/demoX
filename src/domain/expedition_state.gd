@@ -16,6 +16,10 @@ var lost_unit_id := ""
 var outsider_group_id := ""
 var outcome_applied := false
 var narrative: Array[String] = []
+var target_region_id := ""
+var route_id := ""
+var supplies_food := 0
+var discovered_region_id := ""
 
 
 func _init(expedition_id := "") -> void:

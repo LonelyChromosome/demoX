@@ -6,6 +6,9 @@ var turn_manager: TurnManager
 var content: VBoxContainer
 var selected_units: Array[String] = []
 var outside_system := OutsideSystem.new()
+var world_system := WorldSystem.new()
+var selected_target_region_id := ""
+var selected_supply_food := 0
 
 
 func _ready() -> void:
@@ -48,7 +51,12 @@ func refresh() -> void:
 func _add_team_picker() -> void:
 	var planned := turn_manager.get_planned_expedition()
 	if planned != null:
-		_add_text("DỰ KIẾN THÁM HIỂM\n%s" % _unit_list(planned.unit_ids))
+		var planned_region := state.world_state.regions.get(planned.target_region_id) as RegionState
+		_add_text("DỰ KIẾN THÁM HIỂM\n%s\nĐích: %s · Chuẩn bị: %d Lương thực" % [
+			_unit_list(planned.unit_ids),
+			planned_region.name if planned_region != null else "vùng gần thành",
+			planned.supplies_food,
+		])
 		_add_button("Hủy chuyến đi dự kiến", func(): turn_manager.cancel_expedition())
 		return
 	_add_text("Chọn đúng 2 quân cho chuyến đi hoặc hộ tống:")
@@ -63,6 +71,7 @@ func _add_team_picker() -> void:
 		check.button_pressed = unit.id in selected_units
 		check.toggled.connect(_toggle_unit.bind(unit.id, check))
 		content.add_child(check)
+	_add_expedition_target_picker()
 	var expedition_button := Button.new()
 	expedition_button.text = "Thám hiểm"
 	expedition_button.disabled = selected_units.size() != ExpeditionSystem.TEAM_SIZE
@@ -80,8 +89,11 @@ func _add_expeditions() -> void:
 		_add_separator()
 		_add_title("ĐOÀN THÁM HIỂM")
 		_add_text(_unit_list(expedition.unit_ids))
+		var region := state.world_state.regions.get(expedition.target_region_id) as RegionState
 		var status := "Đang chờ chỗ trở về" if expedition.status == GameEnums.ExpeditionStatus.RETURN_PENDING else "Ngoài thành · Ngày thứ %d" % (expedition.elapsed_days + 1)
-		_add_text("%s\nChưa có tin." % status)
+		_add_text("%s\nHướng tới: %s\nChưa có tin." % [
+			status, region.name if region != null else "vùng chưa rõ",
+		])
 
 
 func _add_outsider_groups() -> void:
@@ -96,6 +108,9 @@ func _add_outsider_groups() -> void:
 		_add_text("%s\n%d người\nTrạng thái: %s" % [
 			_group_glyphs(group), group.member_count(), outside_system.pressure_label(group)
 		])
+		var region := state.world_state.regions.get(group.region_id) as RegionState
+		if region != null:
+			_add_text("Đang ở: %s" % region.name)
 		if group.is_resettling() or group.resettlement_complete:
 			_add_text("Đang tái định cư · còn %d ngày" % group.resettlement_days_left)
 			continue
@@ -164,7 +179,42 @@ func _toggle_unit(enabled: bool, unit_id: String, check: CheckButton) -> void:
 func _queue_expedition() -> void:
 	var team := selected_units.duplicate()
 	selected_units.clear()
-	turn_manager.queue_expedition(team)
+	turn_manager.queue_expedition(team, selected_target_region_id, selected_supply_food)
+
+
+func _add_expedition_target_picker() -> void:
+	var world := world_system.ensure_initialized(state)
+	var selector := OptionButton.new()
+	selector.tooltip_text = "Chọn vùng đã biết để thám hiểm"
+	var target_ids: Array[String] = []
+	for region_id in world.known_regions:
+		if region_id != WorldSystem.CITY_REGION_ID:
+			target_ids.append(region_id)
+	target_ids.sort()
+	for region_id in target_ids:
+		var region := world.regions.get(region_id) as RegionState
+		if region == null:
+			continue
+		selector.add_item(region.name + ("" if region.discovered else " · chưa khảo sát"))
+		selector.set_item_metadata(selector.item_count - 1, region.id)
+	if selector.item_count > 0:
+		if selected_target_region_id.is_empty():
+			selected_target_region_id = selector.get_item_metadata(0)
+		for index in range(selector.item_count):
+			if selector.get_item_metadata(index) == selected_target_region_id:
+				selector.select(index)
+		selector.item_selected.connect(func(index: int):
+			selected_target_region_id = selector.get_item_metadata(index)
+		)
+	content.add_child(selector)
+	var supply := SpinBox.new()
+	supply.min_value = 0
+	supply.max_value = mini(2, state.food)
+	supply.step = 1
+	supply.value = mini(selected_supply_food, int(supply.max_value))
+	supply.prefix = "Lương thực chuẩn bị: "
+	supply.value_changed.connect(func(value: float): selected_supply_food = int(value))
+	content.add_child(supply)
 
 
 func _add_title(text: String) -> void:

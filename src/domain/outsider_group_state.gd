@@ -17,6 +17,10 @@ var resettlement_days_left := 0
 var resettlement_started_day := 0
 var resettlement_complete := false
 var history_tags: Array[Dictionary] = []
+var region_id := ""
+var migration_state := ""
+var migration_reason := ""
+var supported_days := 0
 
 
 func _init(group_id := "") -> void:

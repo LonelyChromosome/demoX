@@ -19,10 +19,15 @@ var expeditions: Dictionary = {}
 var outsider_groups: Dictionary = {}
 var game_over := false
 var failure_reason := ""
+var world_state := WorldState.new()
 
 var day_one_full_knowledge := true
 var active_event_id := ""
 var history: Array[Dictionary] = []
+
+
+func _init() -> void:
+	world_state.initialize_defaults()
 
 func player_roster_count() -> int:
 	var total := 0
