@@ -88,8 +88,11 @@ func open_for_cell(cell: Vector2i) -> void:
 	else:
 		board.present_context_target("", Vector2i(-1, -1), cell)
 	var actions := {}
+	var on_core := current_cell == building.core_cell
 	var detail := turn_manager.information_system.building_detail(state, building)
 	detail += _planned_label(building)
+	if building.type == GameEnums.BuildingType.BARRACKS:
+		detail += "\n\n" + _barracks_progression_detail(building, actions, on_core)
 	if cell != building.core_cell:
 		var role := int(building.job_slots.get(cell, GameEnums.JobRole.NONE))
 		if role == GameEnums.JobRole.TREATMENT:
@@ -101,7 +104,6 @@ func open_for_cell(cell: Vector2i) -> void:
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
 		detail += "\nKéo trực tiếp quân vào một trong 8 ô vận hành để bắt đầu xây."
 		detail += "\nVị trí: %s" % ("hợp lệ" if building.placement_valid else building.placement_reason)
-	var on_core := current_cell == building.core_cell
 	if building.phase == GameEnums.BuildingPhase.BLUEPRINT and on_core:
 		actions["cancel_blueprint"] = "Hủy bản vẽ"
 	elif building.phase == GameEnums.BuildingPhase.BLUEPRINT:
@@ -216,6 +218,14 @@ func _on_action_confirmed(action: String) -> void:
 		turn_manager.queue_prisoner_action(action.get_slice(":", 1), GameEnums.PrisonerAction.SUBMIT)
 	elif action.begins_with("prison_labor:"):
 		turn_manager.queue_prisoner_labor(action.get_slice(":", 1), action.get_slice(":", 2))
+	elif action.begins_with("promotion:"):
+		var unit_id := action.get_slice(":", 1)
+		var target_rank: GameEnums.Rank = int(action.get_slice(":", 2))
+		if turn_manager.queue_promotion(unit_id, current_building_id, target_rank) != null:
+			call_deferred("_reopen_current")
+	elif action.begins_with("cancel_promotion:"):
+		turn_manager.cancel_promotion(action.get_slice(":", 1))
+		call_deferred("_reopen_current")
 	elif action == "clear_slot":
 		var building := _building_at(current_cell)
 		if building != null:
@@ -281,19 +291,136 @@ func _unit_detail(unit: UnitState) -> String:
 	var inspection := turn_manager.get_planned_inspection()
 	if inspection != null and inspection.king_unit_id == unit.id:
 		planned_text += "\nDự kiến: kiểm tra trực tiếp công trình vào cuối ngày"
+	var progression := _unit_progression_detail(unit)
 	var story_lines: Array[String] = unit.backstory.duplicate()
 	var first_memory := maxi(0, unit.memories.size() - 4)
 	for index in range(first_memory, unit.memories.size()):
 		story_lines.append(unit.memories[index])
 	var story := "Chưa có dữ kiện." if story_lines.is_empty() else "\n".join(story_lines)
-	return "Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n\nQUÁ KHỨ & KÝ ỨC\n%s" % [
+	var template := (
+		"Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n%s"
+		+ "\n\nQUÁ KHỨ & KÝ ỨC\n%s"
+	)
+	return template % [
 		_rank_name(unit.rank),
 		_faction_name(unit.faction),
 		_cell_name(unit.board_cell),
 		planned_text,
+		progression,
 		turn_manager.information_system.unit_condition_detail(state, unit),
 		story,
 	]
+
+
+func _unit_progression_detail(unit: UnitState) -> String:
+	var lines: Array[String] = [
+		"TIẾN TRIỂN · %s · %d Chiến công" % [_rank_name(unit.rank), unit.merit]
+	]
+	if unit.rank == GameEnums.Rank.KING:
+		lines.append("Vua không tham gia thăng cấp.")
+		return "\n".join(lines)
+	if unit.is_in_promotion_training():
+		lines.append("ĐANG HUẤN LUYỆN → %s · còn %d ngày" % [
+			_rank_name(unit.promotion_target_rank),
+			maxi(0, unit.promotion_complete_day - state.day),
+		])
+		return "\n".join(lines)
+	var planned := turn_manager.get_planned_promotion(unit.id)
+	if planned != null:
+		lines.append(
+			"DỰ KIẾN HUẤN LUYỆN → %s vào cuối ngày" % _rank_name(planned.target_rank)
+		)
+		return "\n".join(lines)
+	var ready := turn_manager.available_promotions(unit.id)
+	if ready.is_empty():
+		lines.append("Chưa có hướng thăng cấp sẵn sàng.")
+	else:
+		var targets: Array[String] = []
+		for definition in ready:
+			targets.append(_rank_name(int(definition.to_rank)))
+		lines.append("SẴN SÀNG: %s" % ", ".join(targets))
+	return "\n".join(lines)
+
+
+func _barracks_progression_detail(
+	barracks: BuildingState, actions: Dictionary, allow_actions: bool
+) -> String:
+	var lines: Array[String] = ["HUẤN LUYỆN & THĂNG CẤP"]
+	if barracks.phase != GameEnums.BuildingPhase.ACTIVE:
+		lines.append("Doanh trại phải ACTIVE trước khi huấn luyện.")
+		return "\n".join(lines)
+	var unit_ids := state.units.keys()
+	unit_ids.sort()
+	var shown := 0
+	for unit_id in unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if (
+			unit == null
+			or unit.faction != GameEnums.Faction.PLAYER
+			or unit.rank == GameEnums.Rank.KING
+			or unit.is_prisoner
+		):
+			continue
+		var paths := _promotion_paths_for(unit.rank)
+		var planned := turn_manager.get_planned_promotion(unit.id)
+		if paths.is_empty() and planned == null and not unit.is_in_promotion_training():
+			continue
+		shown += 1
+		var name := unit.display_name if not unit.display_name.is_empty() else unit.id
+		lines.append(
+			"%s · %s · %d Chiến công" % [name, _rank_name(unit.rank), unit.merit]
+		)
+		if unit.is_in_promotion_training():
+			lines.append("  ĐANG HUẤN LUYỆN → %s · còn %d ngày" % [
+				_rank_name(unit.promotion_target_rank),
+				maxi(0, unit.promotion_complete_day - state.day),
+			])
+			continue
+		if planned != null:
+			var requirement := turn_manager.promotion_system.promotion_requirement(
+				unit.rank, planned.target_rank
+			)
+			lines.append("  DỰ KIẾN → %s · %d ngày" % [
+				_rank_name(planned.target_rank),
+				int(requirement.get("training_days", 1)),
+			])
+			if allow_actions and planned.barracks_id == barracks.id:
+				actions["cancel_promotion:%s" % unit.id] = "Hủy huấn luyện %s" % name
+			continue
+		for definition in paths:
+			var target_rank := int(definition.to_rank)
+			var merit_required := int(definition.merit_required)
+			var training_days := int(definition.training_days)
+			var validation := turn_manager.promotion_system.validate_promotion(
+				state, unit, target_rank, barracks.id
+			)
+			lines.append("  → %s · cần %d · %d ngày · %s" % [
+				_rank_name(target_rank), merit_required, training_days,
+				"SẴN SÀNG" if validation.valid else validation.reason,
+			])
+			if allow_actions and validation.valid:
+				actions["promotion:%s:%d" % [unit.id, target_rank]] = (
+					"HUẤN LUYỆN %s → %s" % [name, _rank_name(target_rank)]
+				)
+	if shown == 0:
+		lines.append("Chưa có quân phù hợp để thăng cấp.")
+	return "\n".join(lines)
+
+
+func _promotion_paths_for(rank: int) -> Array[Dictionary]:
+	var paths: Array[Dictionary] = []
+	for definition in turn_manager.promotion_system.definitions:
+		if int(definition.from_rank) == rank:
+			paths.append(definition)
+	paths.sort_custom(func(a: Dictionary, b: Dictionary):
+		return int(a.to_rank) < int(b.to_rank)
+	)
+	return paths
+
+
+func _reopen_current() -> void:
+	if current_cell != Vector2i(-1, -1) and turn_manager.can_edit_orders():
+		open_for_cell(current_cell)
 
 
 func _rank_name(rank: int) -> String:

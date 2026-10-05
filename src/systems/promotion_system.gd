@@ -211,7 +211,7 @@ func append_ready_notice(state: GameState, unit: UnitState, result: TurnResoluti
 			"text": "%s đã đủ điều kiện huấn luyện lên %s." % [
 				_unit_name(unit), rank_name(int(definition.to_rank)),
 			],
-			"attention": GameEnums.AttentionLevel.NOTICE,
+			"attention": GameEnums.AttentionLevel.IMPORTANT,
 		})
 
 

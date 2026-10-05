@@ -75,9 +75,9 @@ func _test_data_driven_validation() -> void:
 	_check(
 		(
 			not ready_result.promotion_events.is_empty()
-			and ready_result.promotion_events[0].attention == GameEnums.AttentionLevel.NOTICE
+			and ready_result.promotion_events[0].attention == GameEnums.AttentionLevel.IMPORTANT
 		),
-		"Promotion-ready notice did not keep NOTICE attention"
+		"Promotion-ready notice was not prioritized"
 	)
 	_check(not system.can_promote(state, pawn, GameEnums.Rank.QUEEN, barracks.id), "Undefined target rank was accepted")
 	pawn.merit = 0

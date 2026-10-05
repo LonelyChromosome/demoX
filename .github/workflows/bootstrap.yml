@@ -52,6 +52,24 @@ jobs:
             --headless --path . --script res://tests/s10_event_engine_test.gd
           "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
             --headless --path . --script res://tests/s11_merit_promotion_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/s11_progression_ui_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/turn_resolver_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/building_architecture_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/resource_staffing_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/expedition_system_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/prisoner_lifecycle_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/information_system_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/world_system_test.gd
+          "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" \
+            --headless --path . --script res://tests/final_ui_flow_test.gd
 
       - name: Export Windows x86_64
         shell: bash
