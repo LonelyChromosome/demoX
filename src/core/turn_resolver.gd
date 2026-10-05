@@ -6,6 +6,8 @@ signal phase_started(phase: Phase)
 var food_system := FoodSystem.new()
 var material_system := MaterialSystem.new()
 var staffing_system := StaffingSystem.new()
+var medical_system := MedicalSystem.new()
+var prison_system := PrisonSystem.new()
 
 enum Phase {
 	VALIDATE_ORDERS,
@@ -59,6 +61,8 @@ func resolve(
 	_run_phase(Phase.COMMIT_STAFFING, result)
 	var valid_staffing := staffing_system.validate_orders(state, snapshot.staffing_orders, result)
 	staffing_system.commit(state, valid_staffing, result)
+	prison_system.commit_actions(state, snapshot.prisoner_action_orders, result)
+	prison_system.commit_labor(state, snapshot.prisoner_labor_orders, result)
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
@@ -99,6 +103,7 @@ func _finish_resolution(
 	_finalize_demolition(state, building_system, result)
 
 	_run_phase(Phase.FINALIZE_DAY, result)
+	prison_system.finalize_day(state)
 	state.day_one_full_knowledge = false
 	if state.day < GameState.MAX_DAYS:
 		state.day += 1
@@ -132,6 +137,10 @@ func _validate_moves(
 			continue
 		if not building_system.is_inside_board(order.target):
 			result.reject("move", order.unit_id, "Vị trí đích nằm ngoài bàn cờ")
+			continue
+		var infirmary := medical_system.infirmary_at_slot(state, order.target)
+		if infirmary != null and (unit.faction != GameEnums.Faction.PLAYER or not unit.injured):
+			result.reject("move", order.unit_id, "Chỉ quân bị thương mới vào vị trí điều trị")
 			continue
 		if building_system.is_cell_occupied_by_building(state, order.target):
 			var core_building := building_system.building_at_cell(state, order.target)
@@ -328,6 +337,7 @@ func _resolve_systems(
 		skip_ids[building_id] = true
 	for building_id in result.cancelled_building_ids:
 		skip_ids[building_id] = true
+	prison_system.apply_construction_bonus(state)
 	result.completed_building_ids = building_system.advance_construction(state, skip_ids)
 	building_system.unlock_builders(state, result.completed_building_ids)
 	for building_id in result.completed_building_ids:
@@ -340,6 +350,8 @@ func _resolve_systems(
 				"core": completed.core_cell,
 			})
 	staffing_system.sync_active_farms_from_positions(state, result)
+	prison_system.sync_staffing(state, result)
+	medical_system.sync_and_advance(state, result)
 	food_system.produce(state, result)
 	material_system.produce(state, result)
 
@@ -374,6 +386,7 @@ func _commit_cancel(
 			"type": building.type,
 			"core": building.core_cell,
 		}
+	prison_system.cleanup_cancelled_construction(state, order.building_id)
 	var refund := building_system.cancel_construction(state, order.building_id)
 	if refund < 0:
 		result.reject("cancel_construction", order.building_id, "Trạng thái xây dựng đã thay đổi")
@@ -526,6 +539,13 @@ func _capture_inspection(
 			),
 			"staff_count": staff.size(),
 			"daily_output": _inspection_output(state, building),
+			"patient_count": building.patient_unit_ids.size(),
+			"prisoner_count": building.prisoner_unit_ids.size(),
+			"guard_count": prison_system.guard_count(building),
+			"under_guarded": building.under_guarded,
+			"prisoner_labor_count": _prisoner_labor_count(state, building),
+			"prisoners": _prisoner_summaries(state, building),
+			"prisoner_ids": building.prisoner_unit_ids.duplicate(),
 		},
 	})
 	result.inspected_building_ids.append(building.id)
@@ -537,6 +557,33 @@ func _inspection_output(state: GameState, building: BuildingState) -> int:
 	if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
 		return material_system.manager_output(state, building)
 	return 0
+
+
+func _prisoner_labor_count(state: GameState, building: BuildingState) -> int:
+	var count := 0
+	for unit_id in building.prisoner_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit != null and unit.prisoner_labor:
+			count += 1
+	return count
+
+
+func _prisoner_summaries(state: GameState, building: BuildingState) -> Array[Dictionary]:
+	var summaries: Array[Dictionary] = []
+	for unit_id in building.prisoner_unit_ids:
+		var unit := state.units.get(unit_id) as UnitState
+		if unit == null:
+			continue
+		summaries.append({
+			"name": unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank),
+			"rank": unit.rank,
+			"labor": unit.prisoner_labor,
+		})
+	return summaries
+
+
+func _rank_name(rank: int) -> String:
+	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
 
 
 func _run_phase(phase: Phase, result: TurnResolutionResult) -> void:
