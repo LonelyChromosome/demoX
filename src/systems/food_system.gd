@@ -101,7 +101,8 @@ func eligible_unit_ids(state: GameState) -> Array[String]:
 	for candidate in state.units.values():
 		if (
 			candidate is UnitState
-			and candidate.faction == GameEnums.Faction.PLAYER
+			and (candidate.faction == GameEnums.Faction.PLAYER or candidate.is_prisoner)
+			and not candidate.prisoner_labor
 			and candidate.away_days_left <= 0
 			and consumes_food(candidate)
 		):
@@ -123,7 +124,7 @@ func _cleanup_deaths(
 		if unit == null:
 			continue
 		result.starved_unit_cells[unit_id] = unit.board_cell
-		result.starved_unit_names[unit_id] = unit.display_name if not unit.display_name.is_empty() else unit.id
+		result.starved_unit_names[unit_id] = _unit_name(unit)
 		if not unit.assigned_building_id.is_empty():
 			building_system.remove_builder_from_construction(
 				state, unit.assigned_building_id, unit.id
@@ -135,9 +136,27 @@ func _cleanup_deaths(
 				candidate.manager_unit_id = ""
 			candidate.worker_unit_ids.erase(unit.id)
 			candidate.builder_unit_ids.erase(unit.id)
+			candidate.prisoner_unit_ids.erase(unit.id)
+			if unit.labor_building_id == candidate.id:
+				candidate.prisoner_labor = maxi(0, candidate.prisoner_labor - 1)
 			candidate.job_slots.erase(unit.board_cell)
+		state.prisoners.erase(unit.id)
 		state.units.erase(unit.id)
 		result.starved_unit_ids.append(unit.id)
 
 func consumes_food(unit: UnitState) -> bool:
+	if unit.is_prisoner:
+		return not unit.prisoner_labor
 	return unit.rank != GameEnums.Rank.KING and unit.rank != GameEnums.Rank.QUEEN
+
+
+func _unit_name(unit: UnitState) -> String:
+	if unit.is_prisoner:
+		return "Tù binh %s" % (
+			unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
+		)
+	return unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
+
+
+func _rank_name(rank: int) -> String:
+	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
