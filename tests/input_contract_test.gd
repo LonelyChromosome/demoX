@@ -76,8 +76,8 @@ func _test_right_click_unit_panel(
 	_check(context_route_seen, "Right-click context signal was not routed")
 	_check(contextual.current_unit_id == unit.id, "Unit did not win right-click target priority")
 	_check(popup.visible and popup.title_label.text == unit.display_name, "Unit panel did not open")
-	_check("TIỂU SỬ" in popup.detail_label.text, "Unit panel omitted backstory")
-	_check("Dự kiến đến" in popup.detail_label.text, "Unit panel omitted planned destination state")
+	_check("QUÁ KHỨ" in popup.detail_label.text, "Unit panel omitted backstory")
+	_check("Đã định nước đi" in popup.detail_label.text, "Unit panel omitted planned destination state")
 	_check(board.context_unit_id == unit.id, "Unit panel highlight was not set")
 	popup.close()
 	_check(manager.has_pending_move(unit.id), "Closing Unit panel cancelled planned move")
@@ -107,10 +107,12 @@ func _test_normal_build_flow(
 	var plans := manager.get_planned_buildings()
 	_check(plans.size() == 1, "Normal DEV_MODE=false flow did not create blueprint")
 	var farm: BuildingState = plans[0]
-	contextual.open_for_cell(Vector2i(2, 2))
-	contextual._on_action_confirmed("builder_slot")
-	manager.queue_move(unit.id, Vector2i(2, 2))
-	_check(manager.plan_job_drop(unit.id, Vector2i(2, 2)), "Builder could not be assigned through operational cell")
+	controller._on_cell_pressed(unit.board_cell)
+	controller._on_cell_released(Vector2i(2, 2))
+	_check(
+		manager.get_planned_move_target(unit.id) == Vector2i(2, 2),
+		"Kéo quân vào vùng xây dựng không tạo nước đi dự kiến"
+	)
 	popup.close()
 	_check(manager.get_planned_buildings().size() == 1, "Closing panel cancelled planned building")
 	var result := manager.end_day()
