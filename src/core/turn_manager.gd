@@ -7,12 +7,14 @@ signal resolution_started
 signal resolution_phase_started(phase: int)
 signal resolution_finished(result: TurnResolutionResult)
 signal ration_requested(result: TurnResolutionResult)
+signal prisoner_decision_requested(unit_id: String)
 
 var state: GameState
 var order_queue := OrderQueue.new()
 var resolver := TurnResolver.new()
 var building_system := BuildingSystem.new()
 var information_system := InformationSystem.new()
+var prison_system := PrisonSystem.new()
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult
@@ -75,6 +77,41 @@ func can_plan_inspection(building_id: String) -> bool:
 		and order_queue.get_move(king.id) == null
 		and king.board_cell in building_system.footprint(building.core_cell)
 	)
+
+
+func queue_prisoner_labor(prisoner_id: String, building_id: String) -> AssignPrisonerLaborOrder:
+	if not can_edit_orders():
+		return null
+	return order_queue.plan_prisoner_labor(prisoner_id, building_id, state.day)
+
+
+func cancel_prisoner_labor(prisoner_id: String) -> void:
+	if can_edit_orders():
+		order_queue.cancel_prisoner_labor(prisoner_id)
+
+
+func queue_prisoner_action(
+	prisoner_id: String, action: GameEnums.PrisonerAction
+) -> PrisonerActionOrder:
+	if not can_edit_orders():
+		return null
+	return order_queue.plan_prisoner_action(prisoner_id, action, state.day)
+
+
+func cancel_prisoner_action(prisoner_id: String) -> void:
+	if can_edit_orders():
+		order_queue.cancel_prisoner_action(prisoner_id)
+
+
+func request_prisoner_escape(unit_id: String) -> bool:
+	if not prison_system.request_escape_attempt(state, unit_id):
+		return false
+	prisoner_decision_requested.emit(unit_id)
+	return true
+
+
+func request_prisoner_submission(unit_id: String) -> bool:
+	return prison_system.request_submission(state, unit_id)
 
 
 func cancel_move(unit_id: String) -> void:
@@ -303,14 +340,25 @@ func plan_job_drop(unit_id: String, cell: Vector2i) -> bool:
 		return false
 	if role == GameEnums.JobRole.BUILDER and not unit.can_be_builder():
 		return false
-	if role in [GameEnums.JobRole.MANAGER, GameEnums.JobRole.WORKSHOP_MANAGER, GameEnums.JobRole.FARM_WORKER]:
+	if role in [
+		GameEnums.JobRole.MANAGER,
+		GameEnums.JobRole.WORKSHOP_MANAGER,
+		GameEnums.JobRole.FARM_WORKER,
+		GameEnums.JobRole.TREATMENT,
+		GameEnums.JobRole.PRISON_MANAGER,
+		GameEnums.JobRole.PRISON_GUARD,
+	]:
 		if unit.locked_by_construction or unit.locked_by_healing or unit.away_days_left > 0:
+			return false
+		if role == GameEnums.JobRole.TREATMENT and not unit.injured:
 			return false
 		if role in [GameEnums.JobRole.MANAGER, GameEnums.JobRole.WORKSHOP_MANAGER] and unit.rank == GameEnums.Rank.KING:
 			return false
 	if role != GameEnums.JobRole.BUILDER:
 		order_queue.remove_planned_builder(unit_id)
 	_plan_staff_unassign(unit_id, building_id)
+	if role in [GameEnums.JobRole.TREATMENT, GameEnums.JobRole.PRISON_MANAGER, GameEnums.JobRole.PRISON_GUARD]:
+		return true
 	var planned_building := get_planned_building(building_id)
 	if role == GameEnums.JobRole.BUILDER:
 		if planned_building != null:
@@ -378,6 +426,8 @@ func _plan_staff_unassign(unit_id: String, except_building_id := "") -> void:
 	var building := state.buildings.get(unit.work_building_id) as BuildingState
 	if building == null:
 		return
+	if building.type not in [GameEnums.BuildingType.FARM, GameEnums.BuildingType.MATERIAL_WORKSHOP]:
+		return
 	var staffing := _planned_or_current_staffing(building)
 	var manager_id: String = staffing.manager
 	var workers: Array[String] = staffing.workers
@@ -386,6 +436,11 @@ func _plan_staff_unassign(unit_id: String, except_building_id := "") -> void:
 	workers.erase(unit_id)
 	var slots: Dictionary = staffing.slots
 	queue_staffing(building.id, manager_id, workers, slots)
+
+
+func plan_work_unassign(unit_id: String, except_building_id := "") -> void:
+	if can_edit_orders():
+		_plan_staff_unassign(unit_id, except_building_id)
 
 func _planned_or_current_staffing(building: BuildingState) -> Dictionary:
 	var planned := get_planned_staffing(building.id)
