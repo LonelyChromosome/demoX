@@ -26,7 +26,7 @@ func validate_order(
 			king == null
 			or king.faction != GameEnums.Faction.PLAYER
 			or king.rank != GameEnums.Rank.KING
-			or not king.can_be_moved()
+			or not king.can_manage_city()
 			or blocked_unit_ids.has(king.id)
 			or reserved_unit_ids.has(king.id)
 		):

@@ -16,6 +16,7 @@ var building_system := BuildingSystem.new()
 var information_system := InformationSystem.new()
 var prison_system := PrisonSystem.new()
 var expedition_system := ExpeditionSystem.new()
+var event_system := EventSystem.new()
 var is_resolving := false
 var _pending_snapshot: PendingOrderSnapshot
 var _pending_result: TurnResolutionResult
@@ -44,11 +45,9 @@ func queue_building_inspection(building_id: String) -> InspectBuildingOrder:
 		return null
 	var king := _player_king()
 	var building := state.buildings.get(building_id) as BuildingState
-	if king == null or building == null or not king.can_be_moved():
+	if king == null or building == null or not king.can_manage_city():
 		return null
-	if order_queue.get_move(king.id) != null:
-		return null
-	if king.board_cell not in building_system.footprint(building.core_cell):
+	if state.last_inspection_day == state.day:
 		return null
 	return order_queue.plan_inspection(building_id, king.id, state.day)
 
@@ -74,10 +73,29 @@ func can_plan_inspection(building_id: String) -> bool:
 	return (
 		king != null
 		and building != null
-		and king.can_be_moved()
-		and order_queue.get_move(king.id) == null
-		and king.board_cell in building_system.footprint(building.core_cell)
+		and king.can_manage_city()
+		and state.last_inspection_day != state.day
+		and order_queue.get_inspection() == null
 	)
+
+
+func queue_wasteland_development(unit_ids: Array[String] = []) -> DevelopWastelandOrder:
+	if not can_edit_orders() or not state.wasteland.can_start():
+		return null
+	return order_queue.plan_wasteland_development(state.day, unit_ids)
+
+
+func cancel_wasteland_development() -> void:
+	if can_edit_orders():
+		order_queue.cancel_wasteland_development()
+
+
+func get_planned_wasteland_development() -> DevelopWastelandOrder:
+	return order_queue.get_wasteland_development()
+
+
+func choose_event(event_id: String, choice_id: String) -> bool:
+	return can_edit_orders() and event_system.choose_event(state, event_id, choice_id)
 
 
 func queue_prisoner_labor(prisoner_id: String, building_id: String) -> AssignPrisonerLaborOrder:
@@ -661,17 +679,6 @@ func _next_expedition_id() -> String:
 
 func _on_resolution_phase_started(phase: int) -> void:
 	resolution_phase_started.emit(phase)
-
-
-func _player_king() -> UnitState:
-	for candidate in state.units.values():
-		if (
-			candidate is UnitState
-			and candidate.faction == GameEnums.Faction.PLAYER
-			and candidate.rank == GameEnums.Rank.KING
-		):
-			return candidate
-	return null
 
 
 func _player_king() -> UnitState:

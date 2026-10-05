@@ -33,6 +33,8 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 	_append_medical_prison_events(result, entries)
 	_append_outside_events(result, entries)
 	_append_world_events(result, entries)
+	_append_perimeter_events(result, entries)
+	_append_event_reports(result, entries)
 	_update_visible_building_facts(state, result, updated_keys)
 	for candidate in state.buildings.values():
 		if not (candidate is BuildingState) or candidate.phase != GameEnums.BuildingPhase.ACTIVE:
@@ -53,13 +55,15 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 		if inspected.subject_id not in result.demolished_building_ids:
 			observed.upsert(inspected)
 			updated_keys[inspected.key] = true
-		entries.append(ReportEntry.new(
-			"Vua đã trực tiếp kiểm tra %s." % _building_label(inspected),
-			result.resolved_day,
-			GameEnums.FactConfidence.CONFIRMED,
-			"Vua kiểm tra trực tiếp",
-			inspected.key
-		))
+			entries.append(ReportEntry.new(
+				"Báo cáo kiểm tra %s đã được chuyển tới Vua." % _building_label(inspected),
+				inspected.delivered_day,
+				GameEnums.FactConfidence.CONFIRMED,
+				inspected.source_label,
+				inspected.key,
+				GameEnums.AttentionLevel.IMPORTANT,
+				"attention"
+			))
 	_append_stale_notices(state.day, updated_keys, entries)
 	_append_rejections(result, entries)
 	if entries.is_empty():
@@ -138,6 +142,8 @@ func _reported_building_fact(
 		return null
 	var fact := KnownFact.new(building_fact_key(building.id), building.id, "building")
 	fact.observed_day = day
+	fact.inspected_day = day
+	fact.delivered_day = day
 	fact.source_unit_id = source.id
 	fact.source_label = _unit_name(source)
 	fact.confidence = (
@@ -173,6 +179,8 @@ func _exact_building_fact(
 ) -> KnownFact:
 	var fact := KnownFact.new(building_fact_key(building.id), building.id, "building")
 	fact.observed_day = day
+	fact.inspected_day = day
+	fact.delivered_day = day
 	fact.source_label = source_label
 	fact.source_unit_id = source_id
 	fact.confidence = GameEnums.FactConfidence.CONFIRMED
@@ -193,6 +201,8 @@ func _exact_building_fact(
 func _exact_unit_fact(unit: UnitState, day: int) -> KnownFact:
 	var fact := KnownFact.new(unit_fact_key(unit.id), unit.id, "unit")
 	fact.observed_day = day
+	fact.inspected_day = day
+	fact.delivered_day = day
 	fact.source_label = "Quan sát ban đầu"
 	fact.confidence = GameEnums.FactConfidence.CONFIRMED
 	fact.values = {
@@ -208,7 +218,10 @@ func _fact_from_inspection(snapshot: Dictionary, day: int) -> KnownFact:
 	var fact := KnownFact.new(
 		building_fact_key(snapshot.building_id), snapshot.building_id, "building"
 	)
-	fact.observed_day = day
+	fact.observed_day = int(snapshot.get("inspected_day", day))
+	fact.inspected_day = fact.observed_day
+	fact.delivered_day = int(snapshot.get("delivered_day", day + 1))
+	fact.category = str(snapshot.get("category", "building"))
 	fact.source_unit_id = snapshot.king_unit_id
 	fact.source_label = "Vua kiểm tra trực tiếp"
 	fact.confidence = GameEnums.FactConfidence.CONFIRMED
@@ -343,93 +356,6 @@ func _append_medical_prison_events(
 		))
 
 
-func _append_medical_prison_events(
-	result: TurnResolutionResult, entries: Array[ReportEntry]
-) -> void:
-	for event in result.medical_events:
-		var text := "%s đã vào Y xá điều trị." % event.unit_name
-		if event.kind == "recovered":
-			text = "%s đã hồi phục." % event.unit_name
-		entries.append(ReportEntry.new(
-			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Y xá"
-		))
-	for event in result.prison_events:
-		var text := "Nhà giam thiếu người canh giữ."
-		if event.kind == "admitted":
-			text = "%s đã được đưa vào Nhà giam." % event.unit_name
-		elif event.kind == "labor":
-			text = "%s đã lao động hỗ trợ xây dựng." % event.unit_name
-		elif event.kind == "released":
-			text = "%s đã được thả." % event.unit_name
-		elif event.kind == "killed":
-			text = "%s đã bị xử lý." % event.unit_name
-		elif event.kind == "submitted":
-			text = "%s đã quy phục và trở thành Tốt." % event.unit_name
-		elif event.kind == "continued":
-			text = "%s tiếp tục bị giam." % event.unit_name
-		entries.append(ReportEntry.new(
-			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
-		))
-
-
-func _append_medical_prison_events(
-	result: TurnResolutionResult, entries: Array[ReportEntry]
-) -> void:
-	for event in result.medical_events:
-		var text := "%s đã vào Y xá điều trị." % event.unit_name
-		if event.kind == "recovered":
-			text = "%s đã hồi phục." % event.unit_name
-		entries.append(ReportEntry.new(
-			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Y xá"
-		))
-	for event in result.prison_events:
-		var text := "Nhà giam thiếu người canh giữ."
-		if event.kind == "admitted":
-			text = "%s đã được đưa vào Nhà giam." % event.unit_name
-		elif event.kind == "labor":
-			text = "%s đã lao động hỗ trợ xây dựng." % event.unit_name
-		elif event.kind == "released":
-			text = "%s đã được thả." % event.unit_name
-		elif event.kind == "killed":
-			text = "%s đã bị xử lý." % event.unit_name
-		elif event.kind == "submitted":
-			text = "%s đã quy phục và trở thành Tốt." % event.unit_name
-		elif event.kind == "continued":
-			text = "%s tiếp tục bị giam." % event.unit_name
-		entries.append(ReportEntry.new(
-			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
-		))
-
-
-func _append_medical_prison_events(
-	result: TurnResolutionResult, entries: Array[ReportEntry]
-) -> void:
-	for event in result.medical_events:
-		var text := "%s đã vào Y xá điều trị." % event.unit_name
-		if event.kind == "recovered":
-			text = "%s đã hồi phục." % event.unit_name
-		entries.append(ReportEntry.new(
-			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Y xá"
-		))
-	for event in result.prison_events:
-		var text := "Nhà giam thiếu người canh giữ."
-		if event.kind == "admitted":
-			text = "%s đã được đưa vào Nhà giam." % event.unit_name
-		elif event.kind == "labor":
-			text = "%s đã lao động hỗ trợ xây dựng." % event.unit_name
-		elif event.kind == "released":
-			text = "%s đã được thả." % event.unit_name
-		elif event.kind == "killed":
-			text = "%s đã bị xử lý." % event.unit_name
-		elif event.kind == "submitted":
-			text = "%s đã quy phục và trở thành Tốt." % event.unit_name
-		elif event.kind == "continued":
-			text = "%s tiếp tục bị giam." % event.unit_name
-		entries.append(ReportEntry.new(
-			text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED, "Nhà giam"
-		))
-
-
 func _append_outside_events(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
 	for event in result.expedition_events:
 		entries.append(ReportEntry.new(
@@ -451,6 +377,26 @@ func _append_world_events(result: TurnResolutionResult, entries: Array[ReportEnt
 		))
 
 
+func _append_perimeter_events(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
+	for event in result.perimeter_events:
+		var attention := GameEnums.AttentionLevel.NOTICE
+		if event.kind == "wasteland_complete":
+			attention = GameEnums.AttentionLevel.IMPORTANT
+		entries.append(ReportEntry.new(
+			event.text, result.resolved_day, GameEnums.FactConfidence.CONFIRMED,
+			"Ngoại vi", "", attention, "summary"
+		))
+
+
+func _append_event_reports(result: TurnResolutionResult, entries: Array[ReportEntry]) -> void:
+	for event in result.event_reports:
+		entries.append(ReportEntry.new(
+			event.text, result.resolved_day, GameEnums.FactConfidence.REPORTED,
+			event.source, "event:%s" % event.event_id, int(event.attention),
+			"attention" if int(event.attention) >= GameEnums.AttentionLevel.IMPORTANT else "summary"
+		))
+
+
 func _update_visible_building_facts(
 	state: GameState, result: TurnResolutionResult, updated_keys: Dictionary
 ) -> void:
@@ -464,6 +410,8 @@ func _update_visible_building_facts(
 			continue
 		var fact := KnownFact.new(key, building.id, "building")
 		fact.observed_day = result.resolved_day
+		fact.inspected_day = result.resolved_day
+		fact.delivered_day = result.resolved_day
 		fact.source_label = "Quan sát trực tiếp"
 		fact.confidence = GameEnums.FactConfidence.CONFIRMED
 		fact.values = {
@@ -527,6 +475,12 @@ func _format_building_fact(fact: KnownFact, current_day: int) -> String:
 		lines.append("Nhân lực: %d" % values.staff_count)
 	if values.has("daily_output"):
 		lines.append("Sản lượng hôm qua: %s" % _output_text(values.type, values.daily_output))
+	if int(values.get("confirmed_food", -1)) >= 0:
+		lines.append("Lương thực xác nhận: %d" % values.confirmed_food)
+	if int(values.get("confirmed_materials", -1)) >= 0:
+		lines.append("Vật tư xác nhận: %d" % values.confirmed_materials)
+	if int(values.get("confirmed_troops", -1)) >= 0:
+		lines.append("Quân số xác nhận: %d" % values.confirmed_troops)
 	if values.has("patient_count") and values.get("type") == GameEnums.BuildingType.INFIRMARY:
 		lines.append("Bệnh nhân: %d/3" % values.patient_count)
 	if values.has("prisoner_count") and values.get("type") == GameEnums.BuildingType.PRISON:
@@ -544,8 +498,17 @@ func _format_building_fact(fact: KnownFact, current_day: int) -> String:
 			])
 	lines.append("Nguồn: %s" % (fact.source_label if not fact.source_label.is_empty() else "Chưa rõ"))
 	lines.append("Độ tin cậy: %s" % confidence_label(fact.confidence, fact.is_stale(current_day)))
-	lines.append("Cập nhật: Ngày %d" % fact.observed_day)
+	lines.append("Kiểm tra: Ngày %d · Nhận: Ngày %d" % [fact.inspected_day, fact.delivered_day])
+	lines.append("Độ mới: %s" % freshness_label(fact.freshness(current_day)))
 	return "\n".join(lines)
+
+
+func freshness_label(value: GameEnums.InformationFreshness) -> String:
+	if value == GameEnums.InformationFreshness.FRESH:
+		return "Mới"
+	if value == GameEnums.InformationFreshness.AGING:
+		return "Đang cũ dần"
+	return "THÔNG TIN CŨ"
 
 
 func _format_unit_fact(fact: KnownFact, current_day: int) -> String:

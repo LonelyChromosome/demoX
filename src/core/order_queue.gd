@@ -18,6 +18,7 @@ var _prisoner_labor_orders: Dictionary = {}
 var _prisoner_action_orders: Dictionary = {}
 var _expedition_order: DispatchExpeditionOrder
 var _outsider_orders: Dictionary = {}
+var _develop_wasteland_order: DevelopWastelandOrder
 
 
 func plan_move(
@@ -127,6 +128,22 @@ func cancel_outsider_decision(group_id: String) -> void:
 
 func get_outsider_decision(group_id: String) -> OutsiderDecisionOrder:
 	return _outsider_orders.get(group_id) as OutsiderDecisionOrder
+
+
+func plan_wasteland_development(day: int, unit_ids: Array[String] = []) -> DevelopWastelandOrder:
+	_develop_wasteland_order = DevelopWastelandOrder.new(day, unit_ids)
+	changed.emit()
+	return _develop_wasteland_order
+
+
+func cancel_wasteland_development() -> void:
+	if _develop_wasteland_order != null:
+		_develop_wasteland_order = null
+		changed.emit()
+
+
+func get_wasteland_development() -> DevelopWastelandOrder:
+	return _develop_wasteland_order
 
 
 func move_targets() -> Dictionary:
@@ -324,6 +341,8 @@ func snapshot() -> PendingOrderSnapshot:
 		result.inspect_building_order = _inspect_building_order.copy()
 	if _expedition_order != null:
 		result.expedition_order = _expedition_order.copy()
+	if _develop_wasteland_order != null:
+		result.develop_wasteland_order = _develop_wasteland_order.copy()
 	var outsider_group_ids := _outsider_orders.keys()
 	outsider_group_ids.sort()
 	for group_id in outsider_group_ids:
@@ -364,6 +383,7 @@ func clear() -> void:
 	_demolish_building_order = null
 	_inspect_building_order = null
 	_expedition_order = null
+	_develop_wasteland_order = null
 	_outsider_orders.clear()
 	_prisoner_labor_orders.clear()
 	_prisoner_action_orders.clear()
@@ -384,6 +404,7 @@ func is_empty() -> bool:
 		and _demolish_building_order == null
 		and _inspect_building_order == null
 		and _expedition_order == null
+		and _develop_wasteland_order == null
 		and _outsider_orders.is_empty()
 		and _prisoner_labor_orders.is_empty()
 		and _prisoner_action_orders.is_empty()

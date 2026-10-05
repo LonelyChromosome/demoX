@@ -48,7 +48,20 @@ func is_in_city_roster() -> bool:
 
 func can_be_moved() -> bool:
 	return (
-		not locked_by_construction
+		rank != GameEnums.Rank.KING
+		and faction == GameEnums.Faction.PLAYER
+		and not locked_by_construction
+		and not locked_by_healing
+		and away_days_left <= 0
+		and away_assignment_id.is_empty()
+		and not return_pending
+	)
+
+
+func can_manage_city() -> bool:
+	return (
+		faction == GameEnums.Faction.PLAYER
+		and rank == GameEnums.Rank.KING
 		and not locked_by_healing
 		and away_days_left <= 0
 		and away_assignment_id.is_empty()

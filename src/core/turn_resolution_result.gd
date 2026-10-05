@@ -53,6 +53,12 @@ var trade_food_delta := 0
 var trade_materials_delta := 0
 var expedition_supply_food := 0
 var world_events: Array[String] = []
+var event_reports: Array[Dictionary] = []
+var perimeter_events: Array[Dictionary] = []
+var wasteland_food_spent := 0
+var wasteland_started := false
+var perimeter_food_produced := 0
+var perimeter_materials_produced := 0
 var rejected_orders: Array[Dictionary] = []
 
 

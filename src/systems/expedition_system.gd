@@ -287,7 +287,11 @@ func find_return_cell(state: GameState, origin: Vector2i) -> Vector2i:
 	)
 	var building_system := BuildingSystem.new()
 	for cell in cells:
-		if not occupied.has(cell) and not building_system.is_cell_occupied_by_building(state, cell):
+		if (
+			not occupied.has(cell)
+			and not building_system.is_cell_occupied_by_building(state, cell)
+			and not RuinSystem.new().is_blocked(state, cell)
+		):
 			return cell
 	return Vector2i(-1, -1)
 
@@ -374,7 +378,8 @@ func _duration_for(run_seed: int, expedition_id: String, day: int) -> int:
 
 func _stable_seed(run_seed: int, id: String, day: int, salt: String) -> int:
 	var text := "%d|%s|%d|%s" % [run_seed, id, day, salt]
-	var value := 216613626+	for index in range(text.length()):
+	var value := 216613626
+	for index in range(text.length()):
 		value = (value * 16777619 + text.unicode_at(index)) % 2147483647
 	return absi(value)
 

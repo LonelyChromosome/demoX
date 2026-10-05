@@ -211,6 +211,8 @@ func validate_placement(
 	for cell in cells:
 		if not is_inside_board(cell):
 			return {"valid": false, "reason": "Vùng 3x3 vượt khỏi bàn cờ"}
+		if RuinSystem.new().is_blocked(state, cell):
+			return {"valid": false, "reason": "Vùng xây dựng còn Tàn cuộc chưa dọn"}
 
 	var occupied_by_buildings := _building_cells(state.buildings)
 	for cell in cells:

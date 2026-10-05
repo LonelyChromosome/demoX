@@ -11,6 +11,9 @@ var prison_system := PrisonSystem.new()
 var expedition_system := ExpeditionSystem.new()
 var outside_system := OutsideSystem.new()
 var world_system := WorldSystem.new()
+var event_system := EventSystem.new()
+var perimeter_system := PerimeterSystem.new()
+var ruin_system := RuinSystem.new()
 
 enum Phase {
 	VALIDATE_ORDERS,
@@ -62,6 +65,9 @@ func resolve(
 			state, outside_order, blocked_unit_ids, reserved_away_unit_ids, result
 		):
 			valid_outside_orders.append(outside_order)
+	var valid_wasteland := perimeter_system.validate_development(
+		state, snapshot.develop_wasteland_order, blocked_unit_ids, reserved_away_unit_ids, result
+	) if snapshot.develop_wasteland_order != null else false
 
 	_run_phase(Phase.COMMIT_MOVEMENT, result)
 	_commit_moves(state, valid_moves, result)
@@ -89,6 +95,9 @@ func resolve(
 		expedition_system.commit(state, snapshot.expedition_order, result)
 	for outside_order in valid_outside_orders:
 		outside_system.commit_order(state, outside_order, result)
+	if valid_wasteland:
+		perimeter_system.commit_development(state, snapshot.develop_wasteland_order, result)
+		result.wasteland_started = true
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
 	_resolve_systems(state, building_system, result)
@@ -120,8 +129,6 @@ func _finish_resolution(
 	building_system: BuildingSystem,
 	result: TurnResolutionResult
 ) -> void:
-	_run_phase(Phase.RESOLVE_EVENTS, result)
-	_resolve_events(state, result)
 	var skip_groups := {}
 	for group_id in result.new_outsider_group_ids:
 		skip_groups[group_id] = true
@@ -130,6 +137,8 @@ func _finish_resolution(
 	outside_system.resolve_daily(state, skip_groups, result)
 	_run_phase(Phase.RESOLVE_WORLD, result)
 	world_system.resolve_world(state, result)
+	_run_phase(Phase.RESOLVE_EVENTS, result)
+	_resolve_events(state, result)
 	_run_phase(Phase.RESOLVE_INFORMATION, result)
 	_capture_inspection(state, snapshot, building_system, result)
 
@@ -165,6 +174,9 @@ func _validate_moves(
 			continue
 		if not unit.can_be_moved():
 			result.reject("move", order.unit_id, "Quân cờ đang bị khóa thao tác")
+			continue
+		if ruin_system.is_blocked(state, order.target):
+			result.reject("move", order.unit_id, "Ô đích vẫn bị Tàn cuộc chiếm")
 			continue
 		if unit.board_cell != order.origin:
 			result.reject("move", order.unit_id, "Vị trí ban đầu của quân đã thay đổi")
@@ -392,6 +404,7 @@ func _resolve_systems(
 	for expedition_id in result.committed_expedition_ids:
 		skip_expeditions[expedition_id] = true
 	expedition_system.advance(state, skip_expeditions, result)
+	perimeter_system.resolve_daily(state, result.wasteland_started, result)
 
 
 func _blocked_unit_ids(snapshot: PendingOrderSnapshot) -> Dictionary:
@@ -545,8 +558,8 @@ func _finalize_demolition(
 			result.demolished_building_ids.append(building_id)
 
 
-func _resolve_events(_state: GameState, _result: TurnResolutionResult) -> void:
-	pass
+func _resolve_events(state: GameState, result: TurnResolutionResult) -> void:
+	event_system.advance(state, result)
 
 
 func _start_next_day(_state: GameState, _result: TurnResolutionResult) -> void:
@@ -564,18 +577,14 @@ func _capture_inspection(
 		return
 	var king := state.units.get(order.king_unit_id) as UnitState
 	var building := state.buildings.get(order.building_id) as BuildingState
-	if king == null or king.faction != GameEnums.Faction.PLAYER or king.rank != GameEnums.Rank.KING:
+	if king == null or not king.can_manage_city():
 		result.reject("inspection", order.building_id, "Không còn Vua hợp lệ để kiểm tra")
 		return
 	if building == null:
 		result.reject("inspection", order.building_id, "Công trình không còn tồn tại")
 		return
-	for move in snapshot.move_orders:
-		if move.unit_id == king.id:
-			result.reject("inspection", order.building_id, "Vua đã dùng lượt để di chuyển")
-			return
-	if king.board_cell not in building_system.footprint(building.core_cell):
-		result.reject("inspection", order.building_id, "Vua chưa đứng trong khu công trình")
+	if state.last_inspection_day == order.planned_day:
+		result.reject("inspection", order.building_id, "Vua đã dùng quyền kiểm tra trong ngày")
 		return
 	var manager := state.units.get(building.manager_unit_id) as UnitState
 	var staff := {}
@@ -586,6 +595,9 @@ func _capture_inspection(
 	result.inspection_snapshots.append({
 		"building_id": building.id,
 		"king_unit_id": king.id,
+		"inspected_day": result.resolved_day,
+		"delivered_day": result.resolved_day + 1,
+		"category": _inspection_category(building),
 		"values": {
 			"type": building.type,
 			"core_cell": building.core_cell,
@@ -605,9 +617,25 @@ func _capture_inspection(
 			"prisoner_labor_count": _prisoner_labor_count(state, building),
 			"prisoners": _prisoner_summaries(state, building),
 			"prisoner_ids": building.prisoner_unit_ids.duplicate(),
+			"confirmed_food": state.food if building.type == GameEnums.BuildingType.FARM else -1,
+			"confirmed_materials": state.materials if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP else -1,
+			"confirmed_troops": state.player_roster_count() if building.type == GameEnums.BuildingType.BARRACKS else -1,
 		},
 	})
+	state.last_inspection_day = order.planned_day
 	result.inspected_building_ids.append(building.id)
+
+
+func _inspection_category(building: BuildingState) -> String:
+	if building.type == GameEnums.BuildingType.FARM:
+		return "food"
+	if building.type == GameEnums.BuildingType.MATERIAL_WORKSHOP:
+		return "materials"
+	if building.type == GameEnums.BuildingType.BARRACKS:
+		return "troops"
+	if building.type == GameEnums.BuildingType.INFIRMARY:
+		return "medical"
+	return "prison"
 
 
 func _inspection_output(state: GameState, building: BuildingState) -> int:
