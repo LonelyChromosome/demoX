@@ -29,6 +29,7 @@ var undo_button: Button
 var report_button: Button
 var world_button: Button
 var end_button: Button
+var phase_label: Label
 
 
 func _ready() -> void:
@@ -67,36 +68,56 @@ func _ready() -> void:
 
 
 func _build_shell() -> void:
+	theme = GameplayTheme.create()
 	var background := ColorRect.new()
-	background.color = Color("121416")
+	background.color = Color("697959")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
 
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "top", "right", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 12)
+	add_child(margin)
 	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 10)
-	add_child(root)
+	root.add_theme_constant_override("separation", 8)
+	margin.add_child(root)
+	var header := PanelContainer.new()
+	root.add_child(header)
 
 	var top := HBoxContainer.new()
 	top.custom_minimum_size.y = 58
-	root.add_child(top)
+	top.add_theme_constant_override("separation", 16)
+	header.add_child(top)
+	var title_column := VBoxContainer.new()
+	top.add_child(title_column)
+	var brand := Label.new()
+	brand.text = Localization.text("brand.name")
+	brand.add_theme_font_size_override("font_size", 23)
+	title_column.add_child(brand)
 
 	day_label = Label.new()
-	day_label.add_theme_font_size_override("font_size", 28)
-	top.add_child(day_label)
+	day_label.add_theme_font_size_override("font_size", 17)
+	day_label.add_theme_color_override("font_color", Color("dfc889"))
+	title_column.add_child(day_label)
+	var resources := VBoxContainer.new()
+	top.add_child(resources)
 	resource_label = Label.new()
-	resource_label.add_theme_font_size_override("font_size", 18)
-	top.add_child(resource_label)
+	resource_label.add_theme_font_size_override("font_size", 16)
+	resources.add_child(resource_label)
+	phase_label = Label.new()
+	phase_label.add_theme_color_override("font_color", Color("bfcdac"))
+	resources.add_child(phase_label)
 	resource_delta_label = Label.new()
 	resource_delta_label.add_theme_color_override("font_color", Color("79d8a5"))
-	top.add_child(resource_delta_label)
+	resources.add_child(resource_delta_label)
 	world_indicator_label = Label.new()
-	world_indicator_label.add_theme_color_override("font_color", Color("9bb7c7"))
+	world_indicator_label.add_theme_color_override("font_color", Color("d5cca1"))
 	top.add_child(world_indicator_label)
 	status_label = Label.new()
-	status_label.add_theme_color_override("font_color", Color("d9b86c"))
-	top.add_child(status_label)
+	status_label.add_theme_color_override("font_color", Color("f3dfb3"))
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -115,8 +136,12 @@ func _build_shell() -> void:
 	top.add_child(world_button)
 
 	end_button = Button.new()
+	end_button.custom_minimum_size = Vector2(142, 54)
+	end_button.add_theme_font_size_override("font_size", 17)
+	end_button.add_theme_stylebox_override("normal", GameplayTheme.panel(Color("30586b"), Color("d5bc77")))
 	end_button.pressed.connect(_end_day)
 	top.add_child(end_button)
+	root.add_child(status_label)
 
 	var content := HBoxContainer.new()
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -267,10 +292,10 @@ func _refresh_header() -> void:
 		"food": game_state.food, "materials": game_state.materials,
 	})
 	var world := world_system.ensure_initialized(game_state)
-	world_indicator_label.text = Localization.text("game.season_weather", {
+	world_indicator_label.text = Localization.text("s14.season", {
 		"season": world_system.season_label(world.season),
-		"weather": world_system.weather_label(world.weather),
 	})
+	phase_label.text = Localization.text("s14." + RunBalance.stage(game_state.day))
 	board.set_day(game_state.day, game_state.day > 1)
 
 

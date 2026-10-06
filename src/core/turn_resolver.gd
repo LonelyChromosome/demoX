@@ -136,6 +136,7 @@ func resolve(
 		result.wasteland_started = true
 
 	_run_phase(Phase.RESOLVE_SYSTEMS, result)
+	building_system.commit_repairs(state, snapshot.repair_orders, result)
 	_resolve_systems(state, building_system, result)
 	_run_phase(Phase.FOOD_CONSUMPTION, result)
 	if not food_system.resolve_consumption(state, result, building_system):

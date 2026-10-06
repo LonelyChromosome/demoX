@@ -19,6 +19,13 @@ var patient_unit_ids: Array[String] = []
 var under_guarded := false
 var labor_bonus_applied := false
 var accelerated_by_builders := false
+var damaged := false
+var damage_source := ""
+var repair_history: Array[Dictionary] = []
+
+
+func is_operational() -> bool:
+	return phase == GameEnums.BuildingPhase.ACTIVE and not damaged
 
 
 func _init(

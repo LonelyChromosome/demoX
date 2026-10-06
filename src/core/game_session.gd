@@ -4,8 +4,8 @@ extends RefCounted
 
 static func start_new_game() -> GameState:
 	var state := GameState.new()
-	state.food = 4
-	state.materials = 3
+	state.food = RunBalance.STARTING_FOOD
+	state.materials = RunBalance.STARTING_MATERIALS
 	_add_unit(state, "king", GameEnums.Rank.KING, Vector2i(4, 7))
 	_add_unit(state, "rook", GameEnums.Rank.ROOK, Vector2i(0, 7))
 	_add_unit(state, "knight", GameEnums.Rank.KNIGHT, Vector2i(1, 7))

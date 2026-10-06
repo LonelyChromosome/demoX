@@ -135,8 +135,6 @@ func expedition_duration_modifier(world: WorldState, region_id: String) -> int:
 		modifier += maxi(0, route.travel_cost - 1)
 		if route.safety <= 1:
 			modifier += 1
-	if world.weather in [GameEnums.Weather.STORM, GameEnums.Weather.COLD]:
-		modifier += 1
 	return modifier
 
 
@@ -183,23 +181,9 @@ func expedition_weight_modifiers(
 	return modifiers
 
 
-func food_production_multiplier(world: WorldState) -> float:
-	if world == null:
-		return 1.0
-	var multiplier := 1.0
-	if world.season == GameEnums.Season.AUTUMN:
-		multiplier += 0.15
-	elif world.season == GameEnums.Season.WINTER:
-		multiplier -= 0.25
-	if world.weather == GameEnums.Weather.RAIN:
-		multiplier += 0.10
-	elif world.weather == GameEnums.Weather.STORM:
-		multiplier -= 0.25
-	elif world.weather == GameEnums.Weather.COLD:
-		multiplier -= 0.20
-	elif world.weather == GameEnums.Weather.HEAT:
-		multiplier -= 0.15
-	return clampf(multiplier, 0.5, 1.25)
+func food_production_multiplier(_world: WorldState) -> float:
+	# Compatibility API: environmental consequences now come from crisis events.
+	return 1.0
 
 
 func season_label(season: int) -> String:
@@ -257,12 +241,6 @@ func _update_routes(world: WorldState, result: TurnResolutionResult) -> void:
 			route.safety = mini(MAX_SAFETY, route.safety + 1)
 		elif route.last_used_turn >= 0 and world.world_turn - route.last_used_turn >= 4:
 			route.safety = maxi(0, route.safety - 1)
-		if world.weather == GameEnums.Weather.STORM and route.discovered:
-			route.safety = maxi(0, route.safety - 1)
-			if route.safety == 0 and not route.blocked:
-				route.blocked = true
-				route.blocked_turns_left = 1
-				_add_world_event(result, "Bão đã tạm chặn tuyến %s." % _route_name(world, route))
 
 
 func _update_regions(world: WorldState, result: TurnResolutionResult) -> void:
@@ -359,15 +337,8 @@ func _update_region_threats(world: WorldState, region: RegionState) -> void:
 		2 if world.food_pressure == GameEnums.ResourcePressure.CRITICAL
 		else (1 if world.food_pressure == GameEnums.ResourcePressure.STRAINED else 0)
 	)
-	region.threats.disease = (
-		1 if region.outsider_presence > 0
-		and world.weather in [GameEnums.Weather.RAIN, GameEnums.Weather.STORM]
-		else 0
-	)
-	region.threats.weather_hazard = (
-		2 if world.weather == GameEnums.Weather.STORM
-		else (1 if world.weather in [GameEnums.Weather.COLD, GameEnums.Weather.HEAT] else 0)
-	)
+	region.threats.disease = 0
+	region.threats.weather_hazard = 0
 	region.threats.refugee_pressure = mini(3, region.population_pressure)
 	var total := 0
 	for value in region.threats.values():
@@ -420,29 +391,16 @@ func _update_resource_pressure(
 
 
 func _update_season_and_weather(
-	state: GameState, world: WorldState, result: TurnResolutionResult
+	_state: GameState, world: WorldState, result: TurnResolutionResult
 ) -> void:
 	var previous_season := world.season
 	world.season = mini(
 		GameEnums.Season.WINTER,
 		int(floor(float(world.world_turn) / float(TURNS_PER_SEASON)))
 	)
-	var weather_roll := _stable_seed(state.run_seed, "weather", world.world_turn) % 100
-	world.weather = _weather_for_roll(world.season, weather_roll)
+	world.weather = GameEnums.Weather.CLEAR
 	if world.season != previous_season:
-		_add_world_event(result, "Mùa %s đã tới; nhịp sản xuất và đường xa sẽ thay đổi." % season_label(world.season))
-	if world.weather in [GameEnums.Weather.STORM, GameEnums.Weather.COLD, GameEnums.Weather.HEAT]:
-		_add_world_event(result, "Thời tiết chuyển %s, các tuyến ngoài thành chịu thêm áp lực." % weather_label(world.weather).to_lower())
-
-
-func _weather_for_roll(season: int, roll: int) -> GameEnums.Weather:
-	if season == GameEnums.Season.WINTER:
-		return GameEnums.Weather.COLD if roll < 55 else (GameEnums.Weather.STORM if roll < 72 else GameEnums.Weather.CLEAR)
-	if season == GameEnums.Season.SUMMER:
-		return GameEnums.Weather.HEAT if roll < 38 else (GameEnums.Weather.STORM if roll < 52 else GameEnums.Weather.CLEAR)
-	if season == GameEnums.Season.SPRING:
-		return GameEnums.Weather.RAIN if roll < 40 else (GameEnums.Weather.STORM if roll < 52 else GameEnums.Weather.CLEAR)
-	return GameEnums.Weather.RAIN if roll < 25 else (GameEnums.Weather.COLD if roll < 40 else GameEnums.Weather.CLEAR)
+		_add_world_event(result, Localization.text("s14.season_arrived", {"season": season_label(world.season)}))
 
 
 func _reveal_faction_presence(

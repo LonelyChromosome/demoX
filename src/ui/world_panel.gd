@@ -69,7 +69,6 @@ func refresh() -> void:
 	var world := world_system.ensure_initialized(state)
 	_add_text(Localization.text("world.overview", {
 		"season": world_system.season_label(world.season),
-		"weather": world_system.weather_label(world.weather),
 		"food": world_system.pressure_label(world.food_pressure),
 		"materials": world_system.pressure_label(world.material_pressure),
 	}), Color("d9b86c"))

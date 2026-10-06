@@ -28,6 +28,7 @@ var active_cleanup_ruin_id := ""
 var events: Dictionary = {}
 var resolved_event_definition_ids: Array[String] = []
 var event_sequence := 0
+var last_auto_event_day := -100
 var perimeter_layout := PerimeterLayout.new()
 var wasteland := WastelandState.new()
 var last_inspection_day := 0

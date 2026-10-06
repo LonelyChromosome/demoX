@@ -8,9 +8,9 @@ signal cell_context_requested(cell: Vector2i)
 signal resolution_animation_finished
 
 const BOARD_SIZE := 8
-const LIGHT := Color("968e78")
-const DARK := Color("505953")
-const BORDER := Color("171b19")
+const LIGHT := Color("d1c2a1")
+const DARK := Color("92947b")
+const BORDER := Color("827455")
 const GOLD := Color("d9b86c")
 const PLAYER_PIECE := Color("f3ead5")
 const ENEMY_PIECE := Color("242826")
@@ -31,14 +31,6 @@ const PIECE_GLYPHS := {
 	GameEnums.Rank.KNIGHT: "♞",
 	GameEnums.Rank.BISHOP: "♝",
 	GameEnums.Rank.PAWN: "♟",
-}
-
-const BUILDING_LABELS := {
-	GameEnums.BuildingType.FARM: "N",
-	GameEnums.BuildingType.MATERIAL_WORKSHOP: "X",
-	GameEnums.BuildingType.PRISON: "G",
-	GameEnums.BuildingType.INFIRMARY: "Y",
-	GameEnums.BuildingType.BARRACKS: "D",
 }
 
 const BUILDING_COLORS := {
@@ -76,6 +68,7 @@ var context_unit_id := ""
 var context_building_core := Vector2i(-1, -1)
 var context_cell := Vector2i(-1, -1)
 var board_day_progress := 0.0
+var hovered_cell := Vector2i(-1, -1)
 
 
 func _ready() -> void:
@@ -188,6 +181,9 @@ func _gui_input(event: InputEvent) -> void:
 		if not held_unit_id.is_empty():
 			queue_redraw()
 		var hover_cell := screen_to_cell(event.position)
+		if hover_cell != hovered_cell:
+			hovered_cell = hover_cell
+			queue_redraw()
 		if is_inside(hover_cell):
 			cell_hovered.emit(hover_cell)
 		return
@@ -307,8 +303,16 @@ func _draw() -> void:
 			var rect := Rect2(origin + Vector2(x, y) * tile, Vector2(tile, tile))
 			var original := LIGHT if (x + y) % 2 == 0 else DARK
 			draw_rect(rect, _progress_color(original, 0.20))
-			draw_rect(rect, Color(1.0, 1.0, 1.0, 0.035), false, 1.0)
+			draw_rect(rect.grow(-1), Color(0.27, 0.26, 0.18, 0.15), false, 1.0)
+			var stone_tint := Color(1.0, 0.94, 0.76, 0.06 + float((x * 3 + y * 7) % 4) * 0.018)
+			draw_rect(rect.grow(-3), stone_tint)
+			draw_line(rect.position + Vector2(3, 3), rect.position + Vector2(tile - 3, 3), Color(1, 0.96, 0.81, 0.2), 1)
+			var seam := rect.position + Vector2(tile * 0.5, tile * 0.65)
+			draw_line(seam, seam + Vector2(tile * 0.43, 0), Color(0.28, 0.28, 0.2, 0.09), 1)
 			var cell := Vector2i(x, y)
+			if cell == hovered_cell:
+				draw_rect(rect.grow(-3), Color(1, 0.94, 0.76, 0.13))
+				draw_rect(rect.grow(-3), Color(1, 0.95, 0.81, 0.45), false, 1.5)
 			if cell == selected_cell:
 				draw_rect(rect.grow(-4), Color(0.95, 0.78, 0.31, 0.28))
 				draw_rect(rect.grow(-5), GOLD, false, 3.0)
@@ -333,31 +337,63 @@ func _draw() -> void:
 func _draw_city_foundation(projection: BoardProjection) -> void:
 	var top := projection.board_polygon(24.0)
 	var depth := Vector2(0.0, 15.0)
+	var shadow := PackedVector2Array()
+	for point in top:
+		shadow.append(point + Vector2(8, 23))
+	draw_colored_polygon(shadow, Color(0.15, 0.19, 0.12, 0.26))
 	var front := PackedVector2Array([top[3], top[2], top[2] + depth, top[3] + depth])
 	var side := PackedVector2Array([top[1], top[2], top[2] + depth, top[1] + depth])
-	draw_colored_polygon(front, Color(0.12, 0.13, 0.12, 0.92))
-	draw_colored_polygon(side, Color(0.09, 0.10, 0.10, 0.90))
-	draw_colored_polygon(top, _progress_color(Color("292e2a"), 0.35))
+	draw_colored_polygon(front, Color("766247"))
+	draw_colored_polygon(side, Color("625c44"))
+	draw_colored_polygon(top, Color("b5a17d"))
 
 
 func _draw_city_walls(projection: BoardProjection) -> void:
 	var wall := projection.board_polygon(19.0)
-	var wall_color := _progress_color(Color("82765d"), 0.42)
 	for edge in range(4):
 		if edge == 2:
 			continue
-		draw_line(wall[edge], wall[(edge + 1) % 4], wall_color, 7.0, true)
+		_draw_wall_segment(wall[edge], wall[(edge + 1) % 4])
 	var front_start: Vector2 = wall[3]
 	var front_end: Vector2 = wall[2]
 	var gate_center := (front_start + front_end) * 0.5
 	var direction := (front_end - front_start).normalized()
-	draw_line(front_start, gate_center - direction * 28.0, wall_color, 8.0, true)
-	draw_line(gate_center + direction * 28.0, front_end, wall_color, 8.0, true)
+	_draw_wall_segment(front_start, gate_center - direction * 27.0)
+	_draw_wall_segment(gate_center + direction * 27.0, front_end)
 	for corner in wall:
-		draw_circle(corner, 8.0, wall_color)
+		_draw_tower(corner, false)
 	for tower in [gate_center - direction * 31.0, gate_center + direction * 31.0]:
-		draw_rect(Rect2(tower - Vector2(7.0, 9.0), Vector2(14.0, 18.0)), wall_color)
-	draw_line(gate_center - direction * 24.0, gate_center + direction * 24.0, Color("d0b773"), 3.0, true)
+		_draw_tower(tower, true)
+	# Open gateway: the road remains visible between the two gatehouses.
+	draw_line(gate_center + Vector2(-23, 12), gate_center + Vector2(23, 12), Color("e0c49a"), 5.0)
+	draw_line(gate_center + Vector2(-22, -8), gate_center + Vector2(22, -8), Color("d4bd8e"), 5.0)
+	draw_circle(gate_center + Vector2(0, -8), 4, GOLD)
+
+
+func _draw_wall_segment(a: Vector2, b: Vector2) -> void:
+	var lift := Vector2(0, -7)
+	draw_colored_polygon(PackedVector2Array([a + lift, b + lift, b + Vector2(0, 7), a + Vector2(0, 7)]), Color("998263"))
+	draw_line(a + lift, b + lift, Color("e0cba4"), 5.0, true)
+	draw_line(a + Vector2(0, 6), b + Vector2(0, 6), Color("6e6049"), 2.0, true)
+	var count := maxi(1, int(a.distance_to(b) / 19.0))
+	for index in range(count + 1):
+		var point := a.lerp(b, float(index) / count)
+		draw_rect(Rect2(point + Vector2(-3, -11), Vector2(6, 7)), Color("cbb791"))
+		draw_line(point + Vector2(0, -3), point + Vector2(0, 5), Color(0.32, 0.28, 0.21, 0.36), 1.0)
+
+
+func _draw_tower(base: Vector2, gatehouse: bool) -> void:
+	var width := 15.0 if gatehouse else 13.0
+	draw_rect(Rect2(base + Vector2(-width * 0.5 + 3, 0), Vector2(width, 14)), Color(0.16, 0.16, 0.1, 0.28))
+	draw_rect(Rect2(base + Vector2(-width * 0.5, -12), Vector2(width, 23)), Color("b19a74"))
+	draw_rect(Rect2(base + Vector2(-width * 0.5, -12), Vector2(4, 23)), Color("dec99f"))
+	draw_rect(Rect2(base + Vector2(-width * 0.5 - 2, -15), Vector2(width + 4, 5)), Color("ead6ae"))
+	draw_rect(Rect2(base + Vector2(-2, -4), Vector2(4, 8)), Color("565640"))
+	for offset in [-6, 0, 6]:
+		draw_rect(Rect2(base + Vector2(offset - 2, -18), Vector2(4, 5)), Color("d5bf94"))
+	if gatehouse:
+		draw_line(base + Vector2(0, -8), base + Vector2(0, 13), Color("7b6549"), 1.5)
+		draw_colored_polygon(PackedVector2Array([base + Vector2(0, -7), base + Vector2(11, -4), base + Vector2(0, 2)]), Color("345e79"))
 
 
 func _draw_job_slots(origin: Vector2, tile: float) -> void:
@@ -494,68 +530,17 @@ func _draw_core_marker(
 	ghost: bool
 ) -> void:
 	var rect := _cell_rect(building.core_cell, origin, tile).grow(-tile * 0.14)
-	var shadow_rect := rect
-	shadow_rect.position += Vector2(4, 5)
-	var shadow_alpha := 0.12 if ghost else 0.28
-	draw_rect(shadow_rect, Color(0, 0, 0, shadow_alpha))
-
-	var fill_alpha := 0.30 if ghost else 0.92
-	draw_rect(rect, Color(color.r, color.g, color.b, fill_alpha * color.a))
-
-	var border := _progress_color(GOLD, 0.5)
-	border.a = 0.55 if ghost else 0.95
-	draw_rect(rect, border, false, 3.0 if not ghost else 2.0)
-
-	var inner := rect.grow(-4.0)
-	draw_rect(inner, Color(1, 1, 1, 0.10 if not ghost else 0.05), false, 1.0)
-
-	var label: String = BUILDING_LABELS.get(building.type, "?")
-	var font := get_theme_default_font()
-	var font_size := maxi(20, floori(tile * 0.34))
-	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	var baseline := rect.get_center() + Vector2(-text_size.x * 0.5, text_size.y * 0.18)
-	draw_string(
-		font,
-		baseline,
-		label,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		font_size,
-		Color(1, 1, 1, 0.92 if not ghost else 0.62)
-	)
-
-	var phase_text := ""
-	if building.phase == GameEnums.BuildingPhase.BLUEPRINT:
-		phase_text = "DỰ KIẾN"
-	elif building.phase == GameEnums.BuildingPhase.BUILDING:
-		phase_text = "ĐANG XÂY"
-	elif building.phase == GameEnums.BuildingPhase.ACTIVE:
-		phase_text = "HOẠT ĐỘNG"
-	elif building.phase == GameEnums.BuildingPhase.DEMOLISHING:
-		phase_text = "ĐANG PHÁ"
-
-	var phase_font_size := maxi(9, floori(tile * 0.11))
-	var phase_width := font.get_string_size(
-		phase_text, HORIZONTAL_ALIGNMENT_LEFT, -1, phase_font_size
-	).x
-	var phase_pos := Vector2(
-		rect.get_center().x - phase_width * 0.5,
-		rect.end.y - 5.0
-	)
-	draw_string(
-		font,
-		phase_pos,
-		phase_text,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		phase_font_size,
-		Color(1, 1, 1, 0.82 if not ghost else 0.52)
-	)
-
+	DioramaArt.building(self, rect, building.type, color)
+	if building.damaged:
+		var crack := PackedVector2Array([
+			rect.position + Vector2(rect.size.x * 0.55, 0), rect.get_center() + Vector2(-3, -2),
+			rect.get_center() + Vector2(4, 4), rect.end - Vector2(rect.size.x * 0.45, 0),
+		])
+		draw_polyline(crack, Color("713f2e"), 2.5)
+		draw_arc(rect.get_center(), rect.size.x * 0.53, 0, TAU, 32, Color("bc6d40"), 2)
 	if building.phase == GameEnums.BuildingPhase.ACTIVE and not ghost:
-		var badge_center := rect.position + Vector2(rect.size.x - 8.0, 8.0)
-		draw_circle(badge_center, 5.0, Color("79d8a5"))
-		draw_arc(badge_center, 5.0, 0.0, TAU, 18, Color(1, 1, 1, 0.72), 1.2)
+		var badge_center := rect.end - Vector2(4, 3)
+		draw_circle(badge_center, 3.5, Color("c17546") if building.damaged else Color("6d9963"))
 
 
 func _draw_prisoner_badge(
@@ -587,7 +572,7 @@ func _draw_coordinates(origin: Vector2, tile: float, board_px: float) -> void:
 		var width := font.get_string_size(file, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		draw_string(
 			font,
-			Vector2(origin.x + x * tile + (tile - width) * 0.5, origin.y + board_px + 18),
+			Vector2(origin.x + x * tile + (tile - width) * 0.5, origin.y + board_px + 40),
 			file,
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
@@ -671,6 +656,8 @@ func _draw_piece(
 	var glyph_size := font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 	var center := origin + Vector2(cell) * tile + Vector2(tile * 0.5, tile * 0.5)
 	var baseline := center + Vector2(-glyph_size.x * 0.5, glyph_size.y * 0.34)
+	if not ghost and unit.id == selected_unit_id:
+		baseline.y -= tile * 0.045
 	var color := PLAYER_PIECE if unit.faction == GameEnums.Faction.PLAYER else ENEMY_PIECE
 	color = _progress_color(color, 0.18)
 	var identity := _identity_color(unit.faction, unit.id)
@@ -683,9 +670,9 @@ func _draw_piece(
 	else:
 		var pulse := 1.0
 		if unit.id == selected_unit_id:
-			pulse = 1.0 + 0.07 * sin(Time.get_ticks_msec() * 0.025)
-		draw_circle(center + Vector2(0, tile * 0.25), tile * 0.25 * pulse, Color(identity.r, identity.g, identity.b, 0.46))
-		draw_arc(center + Vector2(0, tile * 0.25), tile * 0.26 * pulse, 0.0, TAU, 32, identity, 2.4)
+			pulse = 1.0 + 0.035 * sin(Time.get_ticks_msec() * 0.003)
+		DioramaArt.ellipse(self, center + Vector2(tile * 0.07, tile * 0.3), Vector2(tile * 0.29, tile * 0.1), Color(0.12, 0.14, 0.1, 0.33))
+		DioramaArt.ellipse(self, center + Vector2(0, tile * 0.26), Vector2(tile * 0.25, tile * 0.08) * pulse, identity)
 		draw_string(
 			font,
 			baseline + Vector2(2, 3),
@@ -695,6 +682,8 @@ func _draw_piece(
 			font_size,
 			Color(0, 0, 0, 0.35)
 		)
+	if not ghost:
+		draw_string_outline(font, baseline, glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 2, Color("514d3d") if unit.faction == GameEnums.Faction.PLAYER else Color("d9c795"))
 	draw_string(font, baseline, glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
 
 
@@ -736,7 +725,7 @@ func _set_held_mouse_position(value: Vector2) -> void:
 
 func _progress_color(original: Color, minimum_saturation: float) -> Color:
 	var gray := original.get_luminance()
-	var desaturated := Color(gray, gray, gray, original.a).lerp(original, minimum_saturation)
+	var desaturated := Color(gray, gray, gray, original.a).lerp(original, maxf(0.8, minimum_saturation))
 	return desaturated.lerp(original, board_day_progress)
 
 
@@ -777,4 +766,6 @@ func _cell_rect(cell: Vector2i, origin: Vector2, tile: float) -> Rect2:
 
 
 func _on_mouse_exited() -> void:
+	hovered_cell = Vector2i(-1, -1)
+	queue_redraw()
 	cell_hovered.emit(Vector2i(-1, -1))

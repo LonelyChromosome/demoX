@@ -12,7 +12,7 @@ var selected_supply_food := 0
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(240, 0)
+	custom_minimum_size = Vector2(280, 0)
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -43,10 +43,77 @@ func refresh() -> void:
 		if unit != null and unit.can_be_moved() and unit.faction == GameEnums.Faction.PLAYER:
 			retained_units.append(unit_id)
 	selected_units = retained_units
+	_add_event_decisions()
+	_add_repairs()
 	_add_title(Localization.text("outside.title"))
 	_add_team_picker()
 	_add_expeditions()
 	_add_outsider_groups()
+
+
+func _add_event_decisions() -> void:
+	var events: Array[EventState] = []
+	for candidate in state.events.values():
+		if candidate is EventState and not candidate.resolved:
+			events.append(candidate)
+	events.sort_custom(func(a: EventState, b: EventState):
+		return a.attention_level > b.attention_level if a.attention_level != b.attention_level else a.id < b.id
+	)
+	for event in events:
+		var definition: Dictionary = turn_manager.event_system.definitions.get(event.definition_id, {})
+		_add_title(Localization.text(str(definition.title_key)) if definition.has("title_key") else event.title)
+		if event.chosen_choice.is_empty() and event.attention_level >= GameEnums.AttentionLevel.IMPORTANT:
+			var title := content.get_child(content.get_child_count() - 1) as Label
+			title.add_theme_color_override("font_color", Color("efc978"))
+		_add_text(Localization.text(str(definition.description_key)) if definition.has("description_key") else event.description)
+		for choice in event.choices:
+			var label := Localization.text(str(choice.label_key)) if choice.has("label_key") else str(choice.get("label", choice.id))
+			if not event.chosen_choice.is_empty():
+				if event.chosen_choice == str(choice.id):
+					_add_text(Localization.text("crisis.choice_planned", {"choice": label}))
+				continue
+			var cost := int(choice.get("materials_required", 0))
+			var button := Button.new()
+			button.text = Localization.text("crisis.cost", {"choice": label, "cost": cost}) if cost > 0 else label
+			button.disabled = not turn_manager.can_edit_orders() or state.materials < cost
+			button.pressed.connect(_choose_event.bind(event.id, str(choice.id)))
+			content.add_child(button)
+		_add_text(Localization.text("crisis.progress", {"stage": mini(event.stage + 1, event.duration), "total": event.duration}))
+		_add_separator()
+
+
+func _choose_event(event_id: String, choice_id: String) -> void:
+	turn_manager.choose_event(event_id, choice_id)
+
+
+func _add_repairs() -> void:
+	var ids := state.buildings.keys()
+	ids.sort()
+	for id in ids:
+		var building := state.buildings[id] as BuildingState
+		if building == null or not building.damaged or building.phase != GameEnums.BuildingPhase.ACTIVE:
+			continue
+		_add_title(LocalizationKeys.building_name(building.type))
+		_add_text(Localization.text("crisis.damaged"))
+		if turn_manager.order_queue.get_repair(id) != null:
+			_add_text(Localization.text("crisis.repair_planned"))
+			_add_button(Localization.text("common.cancel"), _cancel_repair.bind(str(id)))
+		else:
+			var button := Button.new()
+			button.text = Localization.text("crisis.repair", {"cost": RunBalance.REPAIR_COST})
+			button.disabled = not turn_manager.can_edit_orders() or state.materials < RunBalance.REPAIR_COST
+			button.pressed.connect(_queue_repair.bind(str(id)))
+			content.add_child(button)
+		_add_separator()
+
+
+func _queue_repair(building_id: String) -> void:
+	turn_manager.queue_repair(building_id)
+
+
+func _cancel_repair(building_id: String) -> void:
+	if turn_manager.can_edit_orders():
+		turn_manager.order_queue.cancel_repair(building_id)
 
 
 func _add_team_picker() -> void:
@@ -225,6 +292,7 @@ func _add_expedition_target_picker() -> void:
 func _add_title(text: String) -> void:
 	var label := Label.new()
 	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_font_size_override("font_size", 16)
 	content.add_child(label)
 

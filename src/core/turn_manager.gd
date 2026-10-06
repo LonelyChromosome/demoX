@@ -101,7 +101,19 @@ func get_planned_wasteland_development() -> DevelopWastelandOrder:
 
 
 func choose_event(event_id: String, choice_id: String) -> bool:
-	return can_edit_orders() and event_system.choose_event(state, event_id, choice_id)
+	if can_edit_orders() and event_system.choose_event(state, event_id, choice_id):
+		order_queue.changed.emit()
+		return true
+	return false
+
+
+func queue_repair(building_id: String) -> RepairBuildingOrder:
+	var building := state.buildings.get(building_id) as BuildingState
+	if not can_edit_orders() or building == null or not building.damaged:
+		return null
+	if building.phase != GameEnums.BuildingPhase.ACTIVE:
+		return null
+	return order_queue.plan_repair(building_id, state.day)
 
 
 func queue_prisoner_labor(prisoner_id: String, building_id: String) -> AssignPrisonerLaborOrder:

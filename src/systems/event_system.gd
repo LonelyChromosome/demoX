@@ -9,6 +9,7 @@ var effect_handlers: Dictionary = {}
 func _init() -> void:
 	_register_core_handlers()
 	_register_default_definitions()
+	CrisisEvents.install(self)
 
 
 func register_definition(definition: Dictionary) -> bool:
@@ -78,6 +79,8 @@ func choose_event(state: GameState, event_id: String, choice_id: String) -> bool
 		return false
 	for choice in event.choices:
 		if str(choice.get("id", "")) == choice_id:
+			if state.materials < int(choice.get("materials_required", 0)):
+				return false
 			event.chosen_choice = choice_id
 			event.status = GameEnums.EventStatus.ACTIVE
 			event.remember("choice", state.day, {"choice_id": choice_id})
@@ -102,9 +105,15 @@ func advance(state: GameState, result: TurnResolutionResult) -> void:
 		if definition.is_empty():
 			continue
 		if event.status == GameEnums.EventStatus.WAITING_CHOICE and event.chosen_choice.is_empty():
-			_append_report(result, event, Localization.text("event.waiting_choice", {"title": _event_title(event)}))
-			event.last_advanced_day = state.day
-			continue
+			var timeout := int(definition.get("choice_timeout", 0))
+			if timeout > 0 and state.day - event.start_day >= timeout:
+				choose_event(state, event.id, str(definition.get("default_choice", "")))
+			if event.chosen_choice.is_empty():
+				if not event.has_applied_effect("waiting_report"):
+					_append_report(result, event, Localization.text("event.waiting_choice", {"title": _event_title(event)}))
+					event.mark_effect_applied("waiting_report")
+				event.last_advanced_day = state.day
+				continue
 		var stages: Array = definition.get("stages", [])
 		if event.stage < stages.size():
 			var current_stage: Dictionary = stages[event.stage]
@@ -134,24 +143,49 @@ func close_event(state: GameState, summary: String, result_text: String) -> void
 
 
 func _spawn_triggered_events(state: GameState, result: TurnResolutionResult) -> void:
+	if state.day - state.last_auto_event_day < RunBalance.EVENT_COOLDOWN:
+		return
+	if not can_open_large_event(state):
+		return
 	var definition_ids := definitions.keys()
 	definition_ids.sort()
+	var candidates: Array[Dictionary] = []
+	var total_weight := 0
 	for definition_id in definition_ids:
 		if definition_id in state.resolved_event_definition_ids or _has_definition_active(state, definition_id):
 			continue
 		var definition: Dictionary = definitions[definition_id]
+		if state.day < int(definition.get("min_day", 1)) or state.day > int(definition.get("max_day", 32)):
+			continue
 		var condition_id := str(definition.get("condition", "never"))
 		var handler := condition_handlers.get(condition_id) as Callable
 		if not handler.is_valid() or not handler.call(state, definition):
 			continue
+		var weights: Dictionary = definition.get("stage_weights", {})
+		var weight := int(weights.get(RunBalance.stage(state.day), 1))
+		if weight <= 0:
+			continue
+		total_weight += weight
+		candidates.append({"definition": definition, "id": definition_id, "weight": weight})
+	if candidates.is_empty():
+		return
+	var selection := RunBalance.roll(state.run_seed, state.day, "event_selection") % total_weight
+	for candidate in candidates:
+		selection -= int(candidate.weight)
+		if selection >= 0:
+			continue
+		var definition: Dictionary = candidate.definition
+		var condition_id := str(definition.get("condition", "never"))
 		var target_id := str(definition.get("target_id", ""))
 		if condition_id == "outsider_present":
 			var group_ids := state.outsider_groups.keys()
 			group_ids.sort()
 			target_id = str(group_ids[0]) if not group_ids.is_empty() else ""
-		var event := create_event(state, definition_id, str(definition.get("source", "")), target_id)
+		var event := create_event(state, str(candidate.id), str(definition.get("source", "")), target_id)
 		if event != null:
+			state.last_auto_event_day = state.day
 			_append_report(result, event, _definition_text(definition, "description", "", event.description))
+		break
 
 
 func _apply_effect_list(
@@ -197,7 +231,7 @@ func _resolve_event(state: GameState, event: EventState, definition: Dictionary,
 	_append_report(result, event, _definition_text(definition, "resolution_text", "", fallback))
 	for follow_up_id in event.follow_up_event_ids:
 		if definitions.has(follow_up_id) and not _has_definition_active(state, follow_up_id):
-			create_event(state, follow_up_id, event.source, event.target_id)
+			create_event(state, follow_up_id, str(definitions[follow_up_id].get("source", event.source)), event.target_id)
 
 
 func _append_report(result: TurnResolutionResult, event: EventState, text: String) -> void:

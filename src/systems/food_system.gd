@@ -44,6 +44,8 @@ func farm_staff_effort(state: GameState, building: BuildingState) -> float:
 
 
 func production_for_building(state: GameState, building: BuildingState) -> int:
+	if building.damaged:
+		return 0
 	if building.phase not in [GameEnums.BuildingPhase.ACTIVE, GameEnums.BuildingPhase.DEMOLISHING]:
 		return 0
 	if building.type != GameEnums.BuildingType.FARM:

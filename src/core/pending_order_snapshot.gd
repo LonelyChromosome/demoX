@@ -15,3 +15,4 @@ var expedition_order: DispatchExpeditionOrder
 var outsider_orders: Array[OutsiderDecisionOrder] = []
 var develop_wasteland_order: DevelopWastelandOrder
 var promotion_orders: Array[PromoteUnitOrder] = []
+var repair_orders: Array[RepairBuildingOrder] = []

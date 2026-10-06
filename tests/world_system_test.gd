@@ -90,7 +90,7 @@ func _test_season_weather_and_resource_pressure() -> void:
 	world.season = GameEnums.Season.WINTER
 	world.weather = GameEnums.Weather.COLD
 	var harsh := food_system.production_for_building(state, farm)
-	_check(harsh < normal, "Mùa và thời tiết không tác động production")
+	_check(harsh == normal, "Weather must not apply passive production penalties after S14")
 
 
 func _test_migration_and_faction_influence() -> void:

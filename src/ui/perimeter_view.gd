@@ -16,9 +16,9 @@ const ZONE_TITLE_KEYS := {
 	"wasteland": "perimeter.wasteland",
 }
 const ZONE_COLORS := {
-	"refugee": Color("a77d4f"),
-	"forest": Color("426958"),
-	"wasteland": Color("7e6750"),
+	"refugee": Color("a89b70"),
+	"forest": Color("66825b"),
+	"wasteland": Color("a09372"),
 }
 
 var state: GameState
@@ -32,6 +32,10 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(_layout_board)
 	Localization.watch(_on_language_changed)
+	var ambience := PerimeterAmbience.new()
+	ambience.perimeter = self
+	ambience.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(ambience)
 	queue_redraw()
 
 
@@ -251,14 +255,22 @@ func _draw() -> void:
 
 
 func _draw_city_frame() -> void:
-	var center := Rect2(Vector2(size.x * 0.23, 54.0), Vector2(size.x * 0.54, size.y - 146.0))
-	draw_rect(center, Color(0.12, 0.14, 0.14, 0.42))
-	draw_rect(center, Color(0.58, 0.49, 0.31, 0.42), false, 1.5)
-	var font := get_theme_default_font()
-	draw_string(
-		font, Vector2(center.get_center().x - 42.0, 73.0), Localization.text("perimeter.city"),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.77, 0.72, 0.58, 0.62)
-	)
+	draw_rect(Rect2(Vector2.ZERO, size), Color("7d8963"))
+	for index in range(14):
+		var strip := Rect2(0, float(index) / 14.0 * size.y, size.x, size.y / 14.0 + 1)
+		draw_rect(strip, Color(0.91, 0.86, 0.63, 0.16 * (1.0 - float(index) / 14.0)))
+	# Low distant ridges frame the city without crossing the playable plane.
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(0, 70), Vector2(size.x * 0.12, 22), Vector2(size.x * 0.3, 59),
+		Vector2(size.x * 0.54, 9), Vector2(size.x * 0.78, 53), Vector2(size.x, 16),
+		Vector2(size.x, 0), Vector2.ZERO,
+	]), Color("a5af88"))
+	for index in range(26):
+		var x := float(index) / 25.0 * size.x
+		var y := 49.0 + sin(index * 1.3) * 14.0
+		DioramaArt.tree(self, Vector2(x, y), 0.5 + float(index % 3) * 0.12, index)
+	# A soft upper-left haze separates distant scenery from the city.
+	DioramaArt.ellipse(self, Vector2(size.x * 0.3, 28), Vector2(size.x * 0.42, 34), Color(0.95, 0.9, 0.72, 0.1))
 
 
 func _on_language_changed(_locale: String) -> void:
@@ -297,16 +309,23 @@ func _draw_routes() -> void:
 		var finish: Vector2 = route.to
 		var bend := Vector2(start.x, finish.y) if absf(finish.y - start.y) < 80.0 else Vector2(finish.x, start.y)
 		var path := PackedVector2Array([start, start.lerp(bend, 0.55), bend, finish])
-		draw_polyline(path, Color(0.43, 0.37, 0.28, 0.50), 9.0, true)
-		draw_polyline(path, Color(0.72, 0.63, 0.45, 0.36), 2.0, true)
+		draw_polyline(path, Color("73704e"), 19.0, true)
+		draw_polyline(path, Color("bea77d"), 13.0, true)
+		draw_polyline(path, Color(0.89, 0.79, 0.6, 0.55), 3.0, true)
 
 
 func _draw_zone(zone_id: String, zone: Dictionary) -> void:
 	var rect := zone_rect_for(zone_id)
 	var color: Color = ZONE_COLORS[zone_id]
-	draw_rect(rect, Color(color.r, color.g, color.b, 0.20))
-	draw_rect(rect, Color(color.r, color.g, color.b, 0.72), false, 1.5)
+	var terrain := PackedVector2Array()
+	for index in range(28):
+		var angle := TAU * float(index) / 28.0
+		var irregularity := 0.93 + 0.06 * sin(index * 2.7)
+		terrain.append(rect.get_center() + Vector2(cos(angle), sin(angle)) * rect.size * 0.53 * irregularity)
+	draw_colored_polygon(terrain, color)
 	_draw_scenery(zone_id, rect, color)
+	# Compact signpost; the zone itself is terrain, not a panel.
+	draw_style_box(_zone_sign(), Rect2(rect.position + Vector2(3, 0), Vector2(rect.size.x - 6, 48)))
 	var font := get_theme_default_font()
 	draw_string(
 		font, rect.position + Vector2(10.0, 21.0), str(zone.get("title", "")),
@@ -332,32 +351,46 @@ func _draw_zone(zone_id: String, zone: Dictionary) -> void:
 		)
 
 
-func _draw_scenery(zone_id: String, rect: Rect2, color: Color) -> void:
-	if zone_id == "forest":
-		for index in range(4):
-			var x := rect.position.x + 18.0 + index * (rect.size.x - 36.0) / 3.0
-			draw_line(
-				Vector2(x, rect.end.y - 12.0),
-				Vector2(x, rect.end.y - 36.0),
-				Color(color, 0.34),
-				3.0
+func _zone_sign() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.19, 0.25, 0.19, 0.9)
+	style.border_color = Color("b69d67")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	return style
+
+
+func _draw_scenery(zone_id: String, rect: Rect2, _color: Color) -> void:
+	var tall := rect.size.y > 150.0
+	var rows := 5 if tall else 1
+	for row in range(rows):
+		for column in range(3):
+			var point := rect.position + Vector2(
+				22 + float(column) / 2.0 * (rect.size.x - 44),
+				lerpf(110.0 if tall else 80.0, rect.size.y - 20, float(row + 1) / rows)
 			)
-			draw_circle(Vector2(x, rect.end.y - 42.0), 11.0, Color(color, 0.24))
-	elif zone_id == "refugee":
-		draw_polyline(PackedVector2Array([
-			rect.position + Vector2(12.0, rect.size.y - 16.0),
-			rect.position + Vector2(rect.size.x * 0.5, rect.size.y - 42.0),
-			rect.end - Vector2(12.0, 16.0),
-		]), Color(color, 0.32), 2.0)
-	else:
-		for index in range(3):
-			var y := rect.end.y - 18.0 - index * 9.0
-			draw_line(
-				Vector2(rect.position.x + 12.0, y),
-				Vector2(rect.end.x - 12.0, y - 3.0),
-				Color(color, 0.26),
-				1.5
-			)
+			point += Vector2(sin(row * 4 + column * 2) * 7, sin(column * 3) * 6)
+			if zone_id == "forest":
+				DioramaArt.tree(self, point, 0.8 + float((row + column) % 3) * 0.15, row + column)
+				DioramaArt.rock(self, point + Vector2(10, 5), 0.45)
+			elif zone_id == "refugee":
+				if row % 2 == 0 and column != 1:
+					DioramaArt.tent(self, point, 0.75 if tall else 0.65)
+			else:
+				DioramaArt.rock(self, point, 0.9 + column * 0.15)
+				if row % 2 == 0:
+					draw_line(point + Vector2(-9, -2), point + Vector2(14, -7), Color("7f7256"), 4)
+					for stone in range(3):
+						draw_rect(Rect2(point + Vector2(stone * 5 - 5, -18), Vector2(6, 10)), Color("c3b291"))
+			# Sparse grass clumps share the terrain palette, never the cell palette.
+			var grass := point + Vector2(-15, 8)
+			draw_line(grass, grass + Vector2(-3, -5), Color("87935d"), 1)
+			draw_line(grass, grass + Vector2(2, -7), Color("a4aa70"), 1)
+	if zone_id == "wasteland" and float(snapshot.get(zone_id, {}).get("progress", -1.0)) >= 0:
+		var point := rect.get_center() + Vector2(0, 15)
+		draw_line(point + Vector2(-17, 12), point + Vector2(-17, -8), Color("786d4d"), 3)
+		draw_line(point + Vector2(17, 12), point + Vector2(17, -8), Color("786d4d"), 3)
+		draw_line(point + Vector2(-20, -6), point + Vector2(20, -6), Color("d4be89"), 3)
 
 
 func _draw_zone_pieces(rect: Rect2, pieces: Array) -> void:
@@ -367,6 +400,8 @@ func _draw_zone_pieces(rect: Rect2, pieces: Array) -> void:
 		var glyph := str(pieces[index].get("glyph", "♟"))
 		var step := minf(28.0, (rect.size.x - 30.0) / 5.0)
 		var x := rect.position.x + 12.0 + index * step
+		DioramaArt.ellipse(self, Vector2(x + 11, rect.position.y + 73), Vector2(11, 4), Color(0.15, 0.18, 0.12, 0.4))
+		draw_string_outline(font, Vector2(x, rect.position.y + 72), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, 2, Color("46523f"))
 		draw_string(
 			font, Vector2(x, rect.position.y + 72.0), glyph,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("f2ead8")

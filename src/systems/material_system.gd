@@ -13,6 +13,8 @@ var loyalty_system := LoyaltySystem.new()
 
 
 func manager_output(state: GameState, building: BuildingState) -> int:
+	if building.damaged:
+		return 0
 	if building.phase not in [GameEnums.BuildingPhase.ACTIVE, GameEnums.BuildingPhase.DEMOLISHING]:
 		return 0
 	if building.type != GameEnums.BuildingType.MATERIAL_WORKSHOP:

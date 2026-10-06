@@ -19,6 +19,45 @@ const MATERIAL_COST := {
 	GameEnums.BuildingType.BARRACKS: 1,
 }
 
+func damage(state: GameState, building_id: String, source: String) -> bool:
+	var building := state.buildings.get(building_id) as BuildingState
+	if building == null or not building.is_operational() or building.type not in [
+		GameEnums.BuildingType.FARM, GameEnums.BuildingType.MATERIAL_WORKSHOP,
+	]:
+		return false
+	building.damaged = true
+	building.damage_source = source
+	state.remember(Localization.text("crisis.damage", {
+		"building": LocalizationKeys.building_name(building.type),
+	}), "building_damaged:%s" % building.id)
+	return true
+
+
+func commit_repairs(state: GameState, orders: Array[RepairBuildingOrder], result: TurnResolutionResult) -> void:
+	for order in orders:
+		var building := state.buildings.get(order.building_id) as BuildingState
+		if (
+			order.planned_day != state.day or building == null or not building.damaged
+			or building.phase != GameEnums.BuildingPhase.ACTIVE
+			or state.materials < RunBalance.REPAIR_COST
+		):
+			result.reject("repair", order.building_id, Localization.text("crisis.repair_invalid"))
+			continue
+		state.materials -= RunBalance.REPAIR_COST
+		result.materials_spent += RunBalance.REPAIR_COST
+		building.damaged = false
+		building.repair_history.append({"day": state.day, "source": building.damage_source})
+		building.damage_source = ""
+		var report := Localization.text("crisis.repaired", {
+			"building": LocalizationKeys.building_name(building.type),
+		})
+		state.remember(report, "building_repaired:%s" % building.id)
+		result.event_reports.append({
+			"event_id": "repair:%d:%s" % [state.day, building.id], "text": report,
+			"source": "Building", "attention": GameEnums.AttentionLevel.NOTICE,
+		})
+
+
 func build_days(type: GameEnums.BuildingType, builder_count: int) -> int:
 	var base_days: int = BUILD_DAYS.get(type, 1)
 	if builder_count >= 2:

@@ -20,6 +20,23 @@ var _expedition_order: DispatchExpeditionOrder
 var _outsider_orders: Dictionary = {}
 var _develop_wasteland_order: DevelopWastelandOrder
 var _promotion_orders: Dictionary = {}
+var _repair_orders: Dictionary = {}
+
+
+func plan_repair(building_id: String, day: int) -> RepairBuildingOrder:
+	var order := RepairBuildingOrder.new(building_id, day)
+	_repair_orders[building_id] = order
+	changed.emit()
+	return order
+
+
+func get_repair(building_id: String) -> RepairBuildingOrder:
+	return _repair_orders.get(building_id) as RepairBuildingOrder
+
+
+func cancel_repair(building_id: String) -> void:
+	if _repair_orders.erase(building_id):
+		changed.emit()
 
 
 func plan_move(
@@ -391,6 +408,11 @@ func snapshot() -> PendingOrderSnapshot:
 	for key in _remove_builder_orders:
 		result.remove_builder_orders.append((_remove_builder_orders[key] as RemoveBuilderOrder).copy())
 	var promotion_unit_ids := _promotion_orders.keys()
+	var repair_ids := _repair_orders.keys()
+	repair_ids.sort()
+	for building_id in repair_ids:
+		var repair: RepairBuildingOrder = _repair_orders[building_id]
+		result.repair_orders.append(RepairBuildingOrder.new(repair.building_id, repair.planned_day))
 	promotion_unit_ids.sort()
 	for unit_id in promotion_unit_ids:
 		result.promotion_orders.append(
@@ -418,6 +440,7 @@ func clear() -> void:
 	_assign_builder_orders.clear()
 	_remove_builder_orders.clear()
 	_promotion_orders.clear()
+	_repair_orders.clear()
 	if had_orders:
 		changed.emit()
 
@@ -439,4 +462,5 @@ func is_empty() -> bool:
 		and _remove_builder_orders.is_empty()
 		and _planned_job_slots.is_empty()
 		and _promotion_orders.is_empty()
+		and _repair_orders.is_empty()
 	)
