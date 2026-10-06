@@ -5,10 +5,14 @@ config_version=5
 
 [application]
 
-config/name="DemoX"
-run/main_scene="res://src/app/main.tscn"
+config/name="After Checkmate"
+run/main_scene="res://src/app/front_door.tscn"
 config/features=PackedStringArray("4.7")
 boot_splash/show_image=false
+
+[autoload]
+
+AppAudio="*res://src/audio/app_audio.gd"
 
 [display]
 

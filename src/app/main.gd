@@ -17,6 +17,7 @@ var perimeter_view: PerimeterView
 var world_panel: WorldPanel
 var onboarding_panel: OnboardingHintPanel
 var ending_panel: EndingPanel
+var pause_menu: PauseMenu
 var day_label: Label
 var resource_label: Label
 var world_indicator_label: Label
@@ -61,6 +62,8 @@ func _ready() -> void:
 	ration_overlay.submitted.connect(_on_ration_submitted)
 	onboarding_panel.next_requested.connect(_on_onboarding_next)
 	onboarding_panel.skip_requested.connect(_on_onboarding_skip)
+	pause_menu.resume_requested.connect(_resume_from_pause)
+	pause_menu.main_menu_requested.connect(_return_to_main_menu)
 	Localization.watch(_on_language_changed)
 	_show_onboarding_hint(onboarding_system.start(game_state))
 	_refresh_localized_controls()
@@ -181,6 +184,8 @@ func _build_shell() -> void:
 	add_child(onboarding_panel)
 	ending_panel = EndingPanel.new()
 	add_child(ending_panel)
+	pause_menu = PauseMenu.new()
+	add_child(pause_menu)
 
 
 func _undo_current() -> void:
@@ -383,6 +388,26 @@ func _refresh_localized_controls() -> void:
 
 func _exit_tree() -> void:
 	Localization.unwatch(_on_language_changed)
+	if get_tree() != null:
+		get_tree().paused = false
+
+
+func _open_pause_menu() -> void:
+	if pause_menu == null or ending_panel.visible:
+		return
+	pause_menu.open()
+	get_tree().paused = true
+
+
+func _resume_from_pause() -> void:
+	get_tree().paused = false
+	pause_menu.hide()
+
+
+func _return_to_main_menu() -> void:
+	get_tree().paused = false
+	AppAudio.begin_menu_opening()
+	get_tree().change_scene_to_file("res://src/app/front_door.tscn")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -390,6 +415,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
+		return
+	if key_event.keycode == KEY_ESCAPE:
+		_open_pause_menu()
+		get_viewport().set_input_as_handled()
 		return
 	if key_event.keycode == KEY_F11 or (key_event.alt_pressed and key_event.keycode == KEY_ENTER):
 		var mode := DisplayServer.window_get_mode()
