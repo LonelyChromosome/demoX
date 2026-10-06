@@ -5,6 +5,8 @@ var state: GameState
 var turn_manager: TurnManager
 var content: VBoxContainer
 var world_system := WorldSystem.new()
+var title_label: Label
+var close_button: Button
 
 
 func _ready() -> void:
@@ -23,12 +25,12 @@ func _ready() -> void:
 	margin.add_child(root)
 	var header := HBoxContainer.new()
 	root.add_child(header)
-	var title := Label.new()
-	title.text = "THẾ GIỚI NGOÀI THÀNH"
-	title.add_theme_font_size_override("font_size", 20)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
-	var close_button := Button.new()
+	title_label = Label.new()
+	title_label.text = Localization.text("world.title")
+	title_label.add_theme_font_size_override("font_size", 20)
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title_label)
+	close_button = Button.new()
 	close_button.text = "×"
 	close_button.pressed.connect(close)
 	header.add_child(close_button)
@@ -40,6 +42,7 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 8)
 	scroll.add_child(content)
+	Localization.watch(_on_language_changed)
 
 
 func setup(game_state: GameState, manager: TurnManager) -> void:
@@ -64,13 +67,13 @@ func refresh() -> void:
 	for child in content.get_children():
 		child.queue_free()
 	var world := world_system.ensure_initialized(state)
-	_add_text("Mùa %s · %s\nLương thực dài hạn: %s · Vật tư: %s" % [
-		world_system.season_label(world.season),
-		world_system.weather_label(world.weather),
-		world_system.pressure_label(world.food_pressure),
-		world_system.pressure_label(world.material_pressure),
-	], Color("d9b86c"))
-	_add_heading("KHU VỰC")
+	_add_text(Localization.text("world.overview", {
+		"season": world_system.season_label(world.season),
+		"weather": world_system.weather_label(world.weather),
+		"food": world_system.pressure_label(world.food_pressure),
+		"materials": world_system.pressure_label(world.material_pressure),
+	}), Color("d9b86c"))
+	_add_heading(Localization.text("world.regions"))
 	var region_ids := world.known_regions.duplicate()
 	region_ids.sort()
 	for region_id in region_ids:
@@ -80,15 +83,14 @@ func refresh() -> void:
 		if region == null:
 			continue
 		if not region.discovered:
-			_add_text("%s\nĐã quan sát · Chưa khảo sát trực tiếp" % region.name)
+			_add_text("%s\n%s" % [region.name, Localization.text("world.observed")])
 			continue
-		_add_text("%s\n%s · %s · Nguy cơ: %s" % [
-			region.name,
-			world_system.presence_label(region.presence),
-			region.current_condition,
-			_danger_label(region.danger),
-		])
-	_add_heading("TUYẾN ĐƯỜNG")
+		_add_text("%s\n%s" % [region.name, Localization.text("world.region_line", {
+			"presence": world_system.presence_label(region.presence),
+			"condition": region.current_condition,
+			"danger": _danger_label(region.danger),
+		})])
+	_add_heading(Localization.text("world.routes"))
 	var route_ids := world.routes.keys()
 	route_ids.sort()
 	for route_id in route_ids:
@@ -96,20 +98,20 @@ func refresh() -> void:
 		if route == null or not route.discovered:
 			continue
 		var destination := world.regions.get(route.to_region) as RegionState
-		_add_text("Tới %s · %s" % [
-			destination.name if destination != null else "vùng chưa rõ",
-			world_system.route_safety_label(route.safety, route.blocked),
-		])
+		_add_text(Localization.text("world.route_to", {
+			"destination": destination.name if destination != null else Localization.text("outside.unknown_region"),
+			"safety": world_system.route_safety_label(route.safety, route.blocked),
+		}))
 	var known_factions: Array[FactionState] = []
 	for candidate in world.factions.values():
 		if candidate is FactionState and candidate.known:
 			known_factions.append(candidate)
 	if not known_factions.is_empty():
-		_add_heading("DẤU VẾT PHE KHÁC")
+		_add_heading(Localization.text("world.factions"))
 		for faction in known_factions:
 			_add_text("♟ %s · %s" % [faction.name, _relation_label(faction.relation)])
 	if not world.recent_world_events.is_empty():
-		_add_heading("TIN GẦN ĐÂY")
+		_add_heading(Localization.text("world.news"))
 		var start := maxi(0, world.recent_world_events.size() - 4)
 		for index in range(start, world.recent_world_events.size()):
 			_add_text("• %s" % world.recent_world_events[index])
@@ -133,18 +135,29 @@ func _add_text(text: String, color := Color("d6d8da")) -> void:
 
 func _danger_label(danger: int) -> String:
 	if danger >= 4:
-		return "Cao"
+		return Localization.text("world.danger.high")
 	if danger >= 2:
-		return "Đáng lưu ý"
-	return "Thấp"
+		return Localization.text("world.danger.notice")
+	return Localization.text("world.danger.low")
 
 
 func _relation_label(relation: int) -> String:
 	if relation >= 2:
-		return "Có thiện chí"
+		return Localization.text("world.relation.friendly")
 	if relation <= -2:
-		return "Thù địch"
-	return "Chưa rõ thái độ"
+		return Localization.text("world.relation.hostile")
+	return Localization.text("world.relation.unknown")
+
+
+func _on_language_changed(_locale: String) -> void:
+	if title_label != null:
+		title_label.text = Localization.text("world.title")
+		close_button.tooltip_text = Localization.text("common.close")
+	refresh()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -220,7 +220,9 @@ func _apply_outcome(state: GameState, expedition: ExpeditionState, result: TurnR
 	elif expedition.outcome_kind == OUTCOME_DEATH:
 		var lost_id: String = expedition.unit_ids[_stable_seed(state.run_seed, expedition.id, expedition.departure_day, "lost") % TEAM_SIZE]
 		expedition.lost_unit_id = lost_id
-		var lost_name := _unit_name(state.units.get(lost_id) as UnitState)
+		var lost_unit := state.units.get(lost_id) as UnitState
+		var lost_name := _unit_name(lost_unit)
+		state.record_death(lost_unit, "expedition")
 		_remove_unit(state, lost_id)
 		expedition.unit_ids.erase(lost_id)
 		expedition.origin_cells.erase(lost_id)

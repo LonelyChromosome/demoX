@@ -21,6 +21,7 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 8)
 	scroll.add_child(content)
+	Localization.watch(_on_language_changed)
 
 
 func setup(game_state: GameState, manager: TurnManager) -> void:
@@ -42,7 +43,7 @@ func refresh() -> void:
 		if unit != null and unit.can_be_moved() and unit.faction == GameEnums.Faction.PLAYER:
 			retained_units.append(unit_id)
 	selected_units = retained_units
-	_add_title("NGOÀI THÀNH")
+	_add_title(Localization.text("outside.title"))
 	_add_team_picker()
 	_add_expeditions()
 	_add_outsider_groups()
@@ -52,14 +53,14 @@ func _add_team_picker() -> void:
 	var planned := turn_manager.get_planned_expedition()
 	if planned != null:
 		var planned_region := state.world_state.regions.get(planned.target_region_id) as RegionState
-		_add_text("DỰ KIẾN THÁM HIỂM\n%s\nĐích: %s · Chuẩn bị: %d Lương thực" % [
-			_unit_list(planned.unit_ids),
-			planned_region.name if planned_region != null else "vùng gần thành",
-			planned.supplies_food,
-		])
-		_add_button("Hủy chuyến đi dự kiến", func(): turn_manager.cancel_expedition())
+		_add_text(Localization.text("outside.planned_expedition", {
+			"units": _unit_list(planned.unit_ids),
+			"target": planned_region.name if planned_region != null else Localization.text("outside.near_city"),
+			"food": planned.supplies_food,
+		}))
+		_add_button(Localization.text("outside.cancel_expedition"), func(): turn_manager.cancel_expedition())
 		return
-	_add_text("Chọn đúng 2 quân cho chuyến đi hoặc hộ tống:")
+	_add_text(Localization.text("outside.choose_two"))
 	var ids := state.units.keys()
 	ids.sort()
 	for unit_id in ids:
@@ -73,7 +74,7 @@ func _add_team_picker() -> void:
 		content.add_child(check)
 	_add_expedition_target_picker()
 	var expedition_button := Button.new()
-	expedition_button.text = "Thám hiểm"
+	expedition_button.text = Localization.text("outside.explore")
 	expedition_button.disabled = selected_units.size() != ExpeditionSystem.TEAM_SIZE
 	expedition_button.pressed.connect(_queue_expedition)
 	content.add_child(expedition_button)
@@ -87,13 +88,15 @@ func _add_expeditions() -> void:
 		if expedition == null or expedition.status == GameEnums.ExpeditionStatus.COMPLETE:
 			continue
 		_add_separator()
-		_add_title("ĐOÀN THÁM HIỂM")
+		_add_title(Localization.text("outside.expedition"))
 		_add_text(_unit_list(expedition.unit_ids))
 		var region := state.world_state.regions.get(expedition.target_region_id) as RegionState
-		var status := "Đang chờ chỗ trở về" if expedition.status == GameEnums.ExpeditionStatus.RETURN_PENDING else "Ngoài thành · Ngày thứ %d" % (expedition.elapsed_days + 1)
-		_add_text("%s\nHướng tới: %s\nChưa có tin." % [
-			status, region.name if region != null else "vùng chưa rõ",
-		])
+		var status := Localization.text("outside.return_wait") if expedition.status == GameEnums.ExpeditionStatus.RETURN_PENDING else Localization.text("outside.day_status", {"day": expedition.elapsed_days + 1})
+		_add_text(Localization.text("outside.expedition_detail", {
+			"status": status,
+			"target": region.name if region != null else Localization.text("outside.unknown_region"),
+			"news": Localization.text("outside.no_news"),
+		}))
 
 
 func _add_outsider_groups() -> void:
@@ -105,46 +108,48 @@ func _add_outsider_groups() -> void:
 			continue
 		_add_separator()
 		_add_title(group.name.to_upper())
-		_add_text("%s\n%d người\nTrạng thái: %s" % [
-			_group_glyphs(group), group.member_count(), outside_system.pressure_label(group)
-		])
+		_add_text(Localization.text("outside.group_detail", {
+			"pieces": _group_glyphs(group),
+			"people": Localization.text("outside.people", {"count": group.member_count()}),
+			"status": Localization.text("outside.status", {"status": outside_system.pressure_label(group)}),
+		}))
 		var region := state.world_state.regions.get(group.region_id) as RegionState
 		if region != null:
-			_add_text("Đang ở: %s" % region.name)
+			_add_text(Localization.text("outside.location", {"region": region.name}))
 		if group.is_resettling() or group.resettlement_complete:
-			_add_text("Đang tái định cư · còn %d ngày" % group.resettlement_days_left)
+			_add_text(Localization.text("outside.resettling", {"days": group.resettlement_days_left}))
 			continue
 		_add_text(
-			"Đang được hỗ trợ · %d Lương thực/ngày" % group.member_count()
-			if group.support_active else "Chưa được hỗ trợ"
+			Localization.text("outside.supported", {"food": group.member_count()})
+			if group.support_active else Localization.text("outside.unsupported")
 		)
 		var planned := turn_manager.get_planned_outsider_action(group.id)
 		if planned != null:
-			_add_text("DỰ KIẾN: %s" % _outside_action_name(planned.action))
-			_add_button("Hủy quyết định dự kiến", _cancel_group_action.bind(group.id))
+			_add_text(Localization.text("outside.planned", {"action": _outside_action_name(planned.action)}))
+			_add_button(Localization.text("outside.cancel_decision"), _cancel_group_action.bind(group.id))
 			continue
 		if group.support_active:
 			_add_button(
-				"Ngừng hỗ trợ",
+				Localization.text("outside.stop_support"),
 				_queue_group_action.bind(group.id, GameEnums.OutsiderAction.STOP_SUPPORT)
 			)
 		else:
 			_add_button(
-				"Hỗ trợ lương thực",
+				Localization.text("outside.support"),
 				_queue_group_action.bind(group.id, GameEnums.OutsiderAction.START_SUPPORT)
 			)
 		if not group.trade_offer.is_empty():
-			_add_text("Đề nghị: 1 Vật tư ↔ 1 Lương thực")
+			_add_text(Localization.text("outside.trade_offer"))
 			_add_button(
-				"Chấp thuận trao đổi",
+				Localization.text("outside.accept_trade"),
 				_queue_group_action.bind(group.id, GameEnums.OutsiderAction.ACCEPT_TRADE)
 			)
 			_add_button(
-				"Từ chối trao đổi",
+				Localization.text("outside.reject_trade"),
 				_queue_group_action.bind(group.id, GameEnums.OutsiderAction.REJECT_TRADE)
 			)
 		var resettle := Button.new()
-		resettle.text = "Tái định cư"
+		resettle.text = Localization.text("outside.resettle")
 		resettle.disabled = selected_units.size() != OutsideSystem.ESCORT_COUNT
 		resettle.pressed.connect(_queue_resettlement.bind(group.id))
 		content.add_child(resettle)
@@ -185,7 +190,7 @@ func _queue_expedition() -> void:
 func _add_expedition_target_picker() -> void:
 	var world := world_system.ensure_initialized(state)
 	var selector := OptionButton.new()
-	selector.tooltip_text = "Chọn vùng đã biết để thám hiểm"
+	selector.tooltip_text = Localization.text("outside.select_region")
 	var target_ids: Array[String] = []
 	for region_id in world.known_regions:
 		if region_id != WorldSystem.CITY_REGION_ID:
@@ -195,7 +200,7 @@ func _add_expedition_target_picker() -> void:
 		var region := world.regions.get(region_id) as RegionState
 		if region == null:
 			continue
-		selector.add_item(region.name + ("" if region.discovered else " · chưa khảo sát"))
+		selector.add_item(region.name + ("" if region.discovered else " · " + Localization.text("outside.not_explored")))
 		selector.set_item_metadata(selector.item_count - 1, region.id)
 	if selector.item_count > 0:
 		if selected_target_region_id.is_empty():
@@ -212,7 +217,7 @@ func _add_expedition_target_picker() -> void:
 	supply.max_value = mini(2, state.food)
 	supply.step = 1
 	supply.value = mini(selected_supply_food, int(supply.max_value))
-	supply.prefix = "Lương thực chuẩn bị: "
+	supply.prefix = Localization.text("outside.supply_prefix")
 	supply.value_changed.connect(func(value: float): selected_supply_food = int(value))
 	content.add_child(supply)
 
@@ -266,7 +271,10 @@ func _group_glyphs(group: OutsiderGroupState) -> String:
 
 
 func _outside_action_name(action: GameEnums.OutsiderAction) -> String:
-	return ["hỗ trợ", "ngừng hỗ trợ", "chấp thuận trao đổi", "từ chối trao đổi", "tái định cư"][action]
+	return Localization.text([
+		"outside.action.support", "outside.action.stop_support", "outside.action.accept_trade",
+		"outside.action.reject_trade", "outside.action.resettle",
+	][action])
 
 
 func _unit_name(unit: UnitState) -> String:
@@ -274,8 +282,16 @@ func _unit_name(unit: UnitState) -> String:
 
 
 func _rank_name(rank: int) -> String:
-	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
+	return LocalizationKeys.rank_name(rank)
 
 
 func _glyph(rank: int) -> String:
 	return ["♟", "♞", "♜", "♝", "♛", "♚"][rank]
+
+
+func _on_language_changed(_locale: String) -> void:
+	refresh()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)

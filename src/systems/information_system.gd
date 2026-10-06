@@ -18,7 +18,9 @@ func initialize_day_one(state: GameState) -> void:
 		return
 	for candidate in state.buildings.values():
 		if candidate is BuildingState:
-			observed.upsert(_exact_building_fact(state, candidate, 1, "Quan sát ban đầu", ""))
+			observed.upsert(_exact_building_fact(
+				state, candidate, 1, Localization.text("report.initial_observation"), ""
+			))
 	for candidate in state.units.values():
 		if candidate is UnitState:
 			observed.upsert(_exact_unit_fact(candidate, 1))
@@ -73,19 +75,44 @@ func resolve_daily_information(state: GameState, result: TurnResolutionResult) -
 		entries.append(ReportEntry.new("Không có thông tin mới đáng chú ý.", result.resolved_day))
 	result.report_entries = entries
 	observed.set_daily_report(result.resolved_day, entries)
+	_archive_report_entries(state, result.resolved_day, entries)
+
+
+func _archive_report_entries(
+	state: GameState, day: int, entries: Array[ReportEntry]
+) -> void:
+	var known := {}
+	for archived in state.report_history:
+		known["%s:%s:%s" % [archived.get("day", 0), archived.get("fact_key", ""), archived.get("text", "")]] = true
+	for entry in entries:
+		var key := "%s:%s:%s" % [day, entry.fact_key, entry.text]
+		if known.has(key):
+			continue
+		known[key] = true
+		state.report_history.append({
+			"day": day,
+			"text": entry.text,
+			"source": entry.source_label,
+			"fact_key": entry.fact_key,
+			"attention": entry.attention_level,
+			"confidence": entry.confidence,
+		})
 
 
 func building_detail(state: GameState, building: BuildingState) -> String:
 	if building == null:
-		return "Không có dữ kiện."
+		return Localization.text("report.no_data")
 	if state.day_one_full_knowledge:
 		return _format_building_fact(
-			_exact_building_fact(state, building, state.day, "Quan sát ban đầu", ""), state.day
+			_exact_building_fact(
+				state, building, state.day, Localization.text("report.initial_observation"), ""
+			), state.day
 		)
 	var fact := observed.get_fact(building_fact_key(building.id))
 	if fact == null:
-		return "%s · %s\nChưa có báo cáo nội bộ." % [
-			_building_name(building.type), _phase_name(building.phase)
+		return "%s · %s\n%s" % [
+			_building_name(building.type), _phase_name(building.phase),
+			Localization.text("report.no_internal"),
 		]
 	var visible_fact := fact.copy()
 	visible_fact.values["type"] = building.type
@@ -96,12 +123,12 @@ func building_detail(state: GameState, building: BuildingState) -> String:
 
 func unit_condition_detail(state: GameState, unit: UnitState) -> String:
 	if unit == null:
-		return "Chưa có dữ kiện."
+		return Localization.text("report.no_data")
 	if state.day_one_full_knowledge:
 		return _format_unit_fact(_exact_unit_fact(unit, state.day), state.day)
 	var fact := observed.get_fact(unit_fact_key(unit.id))
 	if fact == null:
-		return "Tình trạng nội bộ: chưa có báo cáo."
+		return Localization.text("report.unit_no_internal")
 	return _format_unit_fact(fact, state.day)
 
 
@@ -129,12 +156,12 @@ func unit_fact_key(unit_id: String) -> String:
 
 func confidence_label(confidence: GameEnums.FactConfidence, stale: bool) -> String:
 	if stale:
-		return "Thông tin cũ"
+		return Localization.text("report.stale")
 	if confidence == GameEnums.FactConfidence.CONFIRMED:
-		return "Đã xác nhận"
+		return Localization.text("report.confirmed")
 	if confidence == GameEnums.FactConfidence.REPORTED:
-		return "Theo báo cáo"
-	return "Chưa chắc chắn"
+		return Localization.text("report.reported")
+	return Localization.text("report.uncertain")
 
 
 func _reported_building_fact(
@@ -206,7 +233,7 @@ func _exact_unit_fact(unit: UnitState, day: int) -> KnownFact:
 	fact.observed_day = day
 	fact.inspected_day = day
 	fact.delivered_day = day
-	fact.source_label = "Quan sát ban đầu"
+	fact.source_label = Localization.text("report.initial_observation")
 	fact.confidence = GameEnums.FactConfidence.CONFIRMED
 	fact.values = {
 		"condition": _true_unit_condition(unit),
@@ -226,7 +253,7 @@ func _fact_from_inspection(snapshot: Dictionary, day: int) -> KnownFact:
 	fact.delivered_day = int(snapshot.get("delivered_day", day + 1))
 	fact.category = str(snapshot.get("category", "building"))
 	fact.source_unit_id = snapshot.king_unit_id
-	fact.source_label = "Vua kiểm tra trực tiếp"
+	fact.source_label = Localization.text("report.king_inspection")
 	fact.confidence = GameEnums.FactConfidence.CONFIRMED
 	fact.values = snapshot.values.duplicate(true)
 	return fact
@@ -581,10 +608,10 @@ func _format_building_fact(fact: KnownFact, current_day: int) -> String:
 
 func freshness_label(value: GameEnums.InformationFreshness) -> String:
 	if value == GameEnums.InformationFreshness.FRESH:
-		return "Mới"
+		return Localization.text("report.fresh")
 	if value == GameEnums.InformationFreshness.AGING:
-		return "Đang cũ dần"
-	return "THÔNG TIN CŨ"
+		return Localization.text("report.aging")
+	return Localization.text("report.stale").to_upper()
 
 
 func _format_unit_fact(fact: KnownFact, current_day: int) -> String:
@@ -645,22 +672,22 @@ func _add_special_building_values(
 
 func _true_unit_condition(unit: UnitState) -> String:
 	if unit.locked_by_healing:
-		return "đang điều trị"
+		return Localization.text("condition.healing")
 	if unit.away_days_left > 0 or not unit.away_assignment_id.is_empty():
-		return "đang đi xa"
+		return Localization.text("condition.away")
 	if unit.locked_by_construction:
-		return "đang tham gia xây dựng"
-	return "ổn định"
+		return Localization.text("condition.building")
+	return Localization.text("condition.stable")
 
 
 func _true_unit_job(unit: UnitState) -> String:
 	if unit.is_manager:
-		return "quản lý"
+		return Localization.text("job.manager")
 	if not unit.work_building_id.is_empty():
-		return "lao động"
+		return Localization.text("job.worker")
 	if not unit.assigned_building_id.is_empty():
-		return "thợ xây"
-	return "nhàn rỗi"
+		return Localization.text("job.builder")
+	return Localization.text("job.idle")
 
 
 func _stable_code(first: String, second: String, day: int) -> int:
@@ -678,7 +705,7 @@ func _unit_name(unit: UnitState) -> String:
 
 
 func _rank_name(rank: int) -> String:
-	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
+	return LocalizationKeys.rank_name(rank)
 
 
 func _rank_glyph(rank: int) -> String:
@@ -701,11 +728,14 @@ func _output_text(type: int, output: int) -> String:
 
 
 func _building_name(type: int) -> String:
-	return ["Nông trại", "Xưởng vật tư", "Nhà giam", "Y xá", "Doanh trại"][type]
+	return LocalizationKeys.building_name(type)
 
 
 func _phase_name(phase: int) -> String:
-	return ["Bản thiết kế", "Đang xây", "Hoạt động", "Đang phá"][phase]
+	return Localization.text([
+		"building.phase.blueprint", "building.phase.building",
+		"building.phase.active", "building.phase.demolishing",
+	][phase])
 
 
 func _cell_name(cell: Vector2i) -> String:

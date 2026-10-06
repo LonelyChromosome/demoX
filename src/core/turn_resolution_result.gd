@@ -66,6 +66,8 @@ var promoted_unit_ids: Array[String] = []
 var loyalty_events: Array[Dictionary] = []
 var social_events: Array[Dictionary] = []
 var rejected_orders: Array[Dictionary] = []
+var ending_triggered := false
+var ending_recap: Dictionary = {}
 
 
 func reject(kind: String, order_id: String, reason: String) -> void:

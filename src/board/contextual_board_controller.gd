@@ -1,12 +1,12 @@
 class_name ContextualBoardController
 extends Node
 
-const BUILD_ACTIONS := {
-	"build_farm": "Nông trại",
-	"build_workshop": "Xưởng vật tư",
-	"build_prison": "Nhà giam",
-	"build_infirmary": "Y xá",
-	"build_barracks": "Doanh trại",
+const BUILD_ACTION_KEYS := {
+	"build_farm": "building.farm",
+	"build_workshop": "building.workshop",
+	"build_prison": "building.prison",
+	"build_infirmary": "building.infirmary",
+	"build_barracks": "building.barracks",
 }
 const BUILD_TYPES := {
 	"build_farm": GameEnums.BuildingType.FARM,
@@ -77,7 +77,7 @@ func open_for_cell(cell: Vector2i) -> void:
 				else other_id
 			)
 			unit_actions["romance:%s:%s" % [unit.id, other_id]] = (
-				"GẮN BÓ với %s" % other_name
+				Localization.text("relationship.confirm", {"name": other_name})
 			)
 		popup.open_at(
 			board.cell_screen_position(cell),
@@ -188,7 +188,7 @@ func _on_action_selected(action: String) -> void:
 			board.cell_screen_position(current_cell),
 			"Xây dựng tại %s" % _cell_name(current_cell),
 			"Chọn công trình",
-			BUILD_ACTIONS
+			_localized_build_actions()
 		)
 		return
 	if BUILD_TYPES.has(action):
@@ -308,51 +308,47 @@ func _unit_detail(unit: UnitState) -> String:
 	var planned := turn_manager.get_planned_move_target(unit.id)
 	var planned_text := ""
 	if planned != Vector2i(-1, -1):
-		planned_text = "\nĐã định nước đi → %s" % _cell_name(planned)
+		planned_text = Localization.text("unit.planned_move", {"cell": _cell_name(planned)})
 	var inspection := turn_manager.get_planned_inspection()
 	if inspection != null and inspection.king_unit_id == unit.id:
-		planned_text += "\nDự kiến: kiểm tra trực tiếp công trình vào cuối ngày"
+		planned_text += Localization.text("unit.planned_inspection")
 	var progression := _unit_progression_detail(unit)
 	var social := _unit_social_detail(unit)
 	var story_lines: Array[String] = unit.backstory.duplicate()
 	var first_memory := maxi(0, unit.memories.size() - 4)
 	for index in range(first_memory, unit.memories.size()):
 		story_lines.append(unit.memories[index])
-	var story := "Chưa có dữ kiện." if story_lines.is_empty() else "\n".join(story_lines)
-	var template := (
-		"Loại quân: %s · Phe: %s\nVị trí nhìn thấy: %s%s\n%s\n%s\n%s"
-		+ "\n\nQUÁ KHỨ & KÝ ỨC\n%s"
-	)
-	return template % [
-		_rank_name(unit.rank),
-		_faction_name(unit.faction),
-		_cell_name(unit.board_cell),
-		planned_text,
-		progression,
-		social,
-		turn_manager.information_system.unit_condition_detail(state, unit),
-		story,
-	]
+	var story := Localization.text("unit.no_data") if story_lines.is_empty() else "\n".join(story_lines)
+	return Localization.text("unit.detail", {
+		"rank": _rank_name(unit.rank),
+		"faction": _faction_name(unit.faction),
+		"cell": _cell_name(unit.board_cell),
+		"planned": planned_text,
+		"progression": progression,
+		"social": social,
+		"condition": turn_manager.information_system.unit_condition_detail(state, unit),
+		"story": story,
+	})
 
 
 func _unit_social_detail(unit: UnitState) -> String:
-	var level := turn_manager.loyalty_system.level_label(unit.rebellion_level)
+	var level := LocalizationKeys.rebellion_name(unit.rebellion_level)
 	var lines: Array[String] = [
-		"TRUNG THÀNH · %d · %s" % [unit.loyalty, level],
+		Localization.text("loyalty.section", {"value": unit.loyalty, "level": level}),
 	]
 	if unit.rebellion_level == GameEnums.RebellionLevel.LOW_OUTPUT:
-		lines.append("Hiệu suất công việc hiện giảm.")
+		lines.append(Localization.text("loyalty.low_output_hint"))
 	elif unit.rebellion_level == GameEnums.RebellionLevel.OBJECTS_BUT_OBEYS:
-		lines.append("Phản đối nhưng vẫn thi hành; hiệu suất giảm.")
+		lines.append(Localization.text("loyalty.objects_hint"))
 	elif unit.rebellion_level == GameEnums.RebellionLevel.RESISTS:
-		lines.append("Đang kháng lệnh: không nhận mệnh lệnh mới.")
+		lines.append(Localization.text("loyalty.resists_hint"))
 	elif unit.rebellion_level == GameEnums.RebellionLevel.REVOLT:
-		lines.append("NỔI LOẠN: mất quyền điều khiển và ngừng làm việc.")
+		lines.append(Localization.text("loyalty.revolt_hint"))
 	var relationships := turn_manager.notable_relationships(unit.id)
 	if relationships.is_empty():
-		lines.append("QUAN HỆ · chưa có quan hệ đáng chú ý")
+		lines.append(Localization.text("relationship.none"))
 		return "\n".join(lines)
-	lines.append("QUAN HỆ")
+	lines.append(Localization.text("relationship.section"))
 	for index in range(mini(3, relationships.size())):
 		var relationship: RelationshipState = relationships[index]
 		var other_id := relationship.other_unit_id(unit.id)
@@ -362,61 +358,53 @@ func _unit_social_detail(unit: UnitState) -> String:
 			if other != null and not other.display_name.is_empty()
 			else other_id
 		)
-		lines.append("%s · Thiện cảm %d · Tin cậy %d · %s" % [
-			other_name,
-			relationship.affinity,
-			relationship.trust,
-			_relationship_status_name(relationship.status),
-		])
+		lines.append(Localization.text("relationship.line", {
+			"name": other_name,
+			"affinity": relationship.affinity,
+			"trust": relationship.trust,
+			"status": _relationship_status_name(relationship.status),
+		}))
 	return "\n".join(lines)
 
 
 func _relationship_status_name(status: String) -> String:
-	return {
-		RelationshipState.NEUTRAL: "Bình thường",
-		RelationshipState.FAMILIAR: "Quen thuộc",
-		RelationshipState.CLOSE: "Thân thiết",
-		RelationshipState.ROMANCE_CANDIDATE: "Có thể gắn bó",
-		RelationshipState.BONDED: "Đã gắn bó",
-	}.get(status, status)
+	return LocalizationKeys.relationship_status(status)
 
 
 func _unit_progression_detail(unit: UnitState) -> String:
 	var lines: Array[String] = [
-		"TIẾN TRIỂN · %s · %d Chiến công" % [_rank_name(unit.rank), unit.merit]
+		Localization.text("promotion.section", {"rank": _rank_name(unit.rank), "merit": unit.merit})
 	]
 	if unit.rank == GameEnums.Rank.KING:
-		lines.append("Vua không tham gia thăng cấp.")
+		lines.append(Localization.text("promotion.king_exempt"))
 		return "\n".join(lines)
 	if unit.is_in_promotion_training():
-		lines.append("ĐANG HUẤN LUYỆN → %s · còn %d ngày" % [
-			_rank_name(unit.promotion_target_rank),
-			maxi(0, unit.promotion_complete_day - state.day),
-		])
+		lines.append(Localization.text("promotion.training", {
+			"rank": _rank_name(unit.promotion_target_rank),
+			"days": maxi(0, unit.promotion_complete_day - state.day),
+		}))
 		return "\n".join(lines)
 	var planned := turn_manager.get_planned_promotion(unit.id)
 	if planned != null:
-		lines.append(
-			"DỰ KIẾN HUẤN LUYỆN → %s vào cuối ngày" % _rank_name(planned.target_rank)
-		)
+		lines.append(Localization.text("promotion.planned", {"rank": _rank_name(planned.target_rank)}))
 		return "\n".join(lines)
 	var ready := turn_manager.available_promotions(unit.id)
 	if ready.is_empty():
-		lines.append("Chưa có hướng thăng cấp sẵn sàng.")
+		lines.append(Localization.text("promotion.none"))
 	else:
 		var targets: Array[String] = []
 		for definition in ready:
 			targets.append(_rank_name(int(definition.to_rank)))
-		lines.append("SẴN SÀNG: %s" % ", ".join(targets))
+		lines.append(Localization.text("promotion.ready", {"targets": ", ".join(targets)}))
 	return "\n".join(lines)
 
 
 func _barracks_progression_detail(
 	barracks: BuildingState, actions: Dictionary, allow_actions: bool
 ) -> String:
-	var lines: Array[String] = ["HUẤN LUYỆN & THĂNG CẤP"]
+	var lines: Array[String] = [Localization.text("promotion.barracks_section")]
 	if barracks.phase != GameEnums.BuildingPhase.ACTIVE:
-		lines.append("Doanh trại phải ACTIVE trước khi huấn luyện.")
+		lines.append(Localization.text("promotion.barracks_inactive"))
 		return "\n".join(lines)
 	var unit_ids := state.units.keys()
 	unit_ids.sort()
@@ -436,9 +424,9 @@ func _barracks_progression_detail(
 			continue
 		shown += 1
 		var name := unit.display_name if not unit.display_name.is_empty() else unit.id
-		lines.append(
-			"%s · %s · %d Chiến công" % [name, _rank_name(unit.rank), unit.merit]
-		)
+		lines.append(Localization.text("promotion.unit_line", {
+			"name": name, "rank": _rank_name(unit.rank), "merit": unit.merit,
+		}))
 		if unit.is_in_promotion_training():
 			lines.append("  ĐANG HUẤN LUYỆN → %s · còn %d ngày" % [
 				_rank_name(unit.promotion_target_rank),
@@ -465,14 +453,14 @@ func _barracks_progression_detail(
 			)
 			lines.append("  → %s · cần %d · %d ngày · %s" % [
 				_rank_name(target_rank), merit_required, training_days,
-				"SẴN SÀNG" if validation.valid else validation.reason,
+				Localization.text("promotion.ready_short") if validation.valid else validation.reason,
 			])
 			if allow_actions and validation.valid:
 				actions["promotion:%s:%d" % [unit.id, target_rank]] = (
-					"HUẤN LUYỆN %s → %s" % [name, _rank_name(target_rank)]
+					Localization.text("promotion.train_action", {"name": name, "rank": _rank_name(target_rank)})
 				)
 	if shown == 0:
-		lines.append("Chưa có quân phù hợp để thăng cấp.")
+		lines.append(Localization.text("promotion.no_candidates"))
 	return "\n".join(lines)
 
 
@@ -493,11 +481,11 @@ func _reopen_current() -> void:
 
 
 func _rank_name(rank: int) -> String:
-	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
+	return LocalizationKeys.rank_name(rank)
 
 
 func _faction_name(faction: int) -> String:
-	return ["Phe ta", "Địch", "Bên ngoài"][faction]
+	return LocalizationKeys.faction_name(faction)
 
 
 func _cell_name(cell: Vector2i) -> String:
@@ -505,11 +493,21 @@ func _cell_name(cell: Vector2i) -> String:
 
 
 func _type_name(type: int) -> String:
-	return ["Nông trại", "Xưởng vật tư", "Nhà giam", "Y xá", "Doanh trại"][type]
+	return LocalizationKeys.building_name(type)
 
 
 func _phase_name(phase: int) -> String:
-	return ["Dự kiến", "Đang xây", "Hoạt động", "Đang phá"][phase]
+	return Localization.text([
+		"building.phase.blueprint", "building.phase.building",
+		"building.phase.active", "building.phase.demolishing",
+	][phase])
+
+
+func _localized_build_actions() -> Dictionary:
+	var actions := {}
+	for action in BUILD_ACTION_KEYS:
+		actions[action] = Localization.text(BUILD_ACTION_KEYS[action])
+	return actions
 
 
 func _on_resolution_started() -> void:

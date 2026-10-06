@@ -676,7 +676,7 @@ func clear_orders() -> void:
 
 
 func end_day() -> TurnResolutionResult:
-	if state == null or is_resolving:
+	if not can_edit_orders():
 		return null
 	is_resolving = true
 	resolution_started.emit()
@@ -708,6 +708,10 @@ func _complete_resolution(result: TurnResolutionResult) -> void:
 	result.social_events.append_array(state.pending_social_events)
 	state.pending_social_events.clear()
 	information_system.resolve_daily_information(state, result)
+	if result.ending_triggered:
+		state.ending_recap_data = resolver.ending_system.build_recap_data(state)
+		state.ending_outcome_id = str(state.ending_recap_data.outcome_id)
+		result.ending_recap = resolver.ending_system.localized_recap(state)
 	order_queue.clear()
 	_pending_snapshot = null
 	_pending_result = null
@@ -719,7 +723,7 @@ func _complete_resolution(result: TurnResolutionResult) -> void:
 
 
 func can_edit_orders() -> bool:
-	return state != null and not is_resolving and not state.game_over
+	return state != null and not is_resolving and not state.game_over and not state.run_ended
 
 
 func has_pending_move(unit_id: String) -> bool:

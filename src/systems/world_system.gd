@@ -203,29 +203,32 @@ func food_production_multiplier(world: WorldState) -> float:
 
 
 func season_label(season: int) -> String:
-	return ["Xuân", "Hạ", "Thu", "Đông"][season]
+	return Localization.text(["season.spring", "season.summer", "season.autumn", "season.winter"][season])
 
 
 func weather_label(weather: int) -> String:
-	return ["Quang", "Mưa", "Bão", "Rét", "Nóng"][weather]
+	return Localization.text(["weather.clear", "weather.rain", "weather.storm", "weather.cold", "weather.heat"][weather])
 
 
 func pressure_label(pressure: int) -> String:
-	return ["Dư dả", "Ổn định", "Căng", "Nguy cấp"][pressure]
+	return Localization.text(["pressure.surplus", "pressure.stable", "pressure.strained", "pressure.critical"][pressure])
 
 
 func presence_label(presence: int) -> String:
-	return ["Chưa biết", "Đã quan sát", "Đã ghé", "Được tiếp tế", "Đã kết nối", "Có ảnh hưởng"][presence]
+	return Localization.text([
+		"presence.unknown", "presence.observed", "presence.visited",
+		"presence.supplied", "presence.connected", "presence.influenced",
+	][presence])
 
 
 func route_safety_label(safety: int, blocked: bool) -> String:
 	if blocked:
-		return "Bị chặn"
+		return Localization.text("route.blocked")
 	if safety >= 4:
-		return "An toàn"
+		return Localization.text("route.safe")
 	if safety >= 2:
-		return "Cần thận trọng"
-	return "Nguy hiểm"
+		return Localization.text("route.caution")
+	return Localization.text("route.dangerous")
 
 
 func condition_for_region(region: RegionState) -> String:

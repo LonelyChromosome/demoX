@@ -89,12 +89,12 @@ func resolve_daily(state: GameState, skip_group_ids: Dictionary, result: TurnRes
 
 func pressure_label(group: OutsiderGroupState) -> String:
 	if group.pressure == GameEnums.OutsidePressure.CALM:
-		return "Yên"
+		return Localization.text("perimeter.stable")
 	if group.pressure == GameEnums.OutsidePressure.UNEASY:
-		return "Bất an"
+		return Localization.text("perimeter.uneasy")
 	if group.pressure == GameEnums.OutsidePressure.TENSE:
-		return "Căng thẳng"
-	return "Hỗn loạn"
+		return Localization.text("perimeter.tense")
+	return Localization.text("perimeter.chaos")
 
 
 func _resolve_support(state: GameState, group: OutsiderGroupState, result: TurnResolutionResult) -> void:
@@ -123,7 +123,11 @@ func _update_pressure(state: GameState, group: OutsiderGroupState, result: TurnR
 		group.history_tags.append({"kind": "left_unresolved", "day": state.day})
 	if group.pressure == GameEnums.OutsidePressure.RIOT:
 		state.game_over = true
-		state.failure_reason = "%s đã tràn vào thành trong hỗn loạn." % group.name
+		state.failure_reason_key = "failure.outsider_overrun"
+		state.failure_reason_args = {"group": group.name}
+		state.failure_reason = Localization.text(
+			state.failure_reason_key, state.failure_reason_args
+		)
 		result.outsider_events.append({"kind": "riot", "text": state.failure_reason})
 
 
@@ -228,6 +232,7 @@ func _continue_resettlement(state: GameState, group: OutsiderGroupState, skip: b
 	if waiting:
 		return
 	result.resettled_group_ids.append(group.id)
+	state.resettled_group_count += 1
 	result.outsider_events.append({"kind": "resettled", "text": "%s đã được tái định cư an toàn. Hai quân hộ tống đã trở về." % group.name})
 	state.remember("%s đã được tái định cư an toàn." % group.name, "resettled")
 	state.outsider_groups.erase(group.id)

@@ -7,6 +7,7 @@ var has_report := false
 var current_entries: Array[ReportEntry] = []
 var full_log_entries: Array[ReportEntry] = []
 var current_day := 1
+var close_button: Button
 
 
 func _ready() -> void:
@@ -25,13 +26,13 @@ func _ready() -> void:
 	var header := HBoxContainer.new()
 	box.add_child(header)
 	title_label = Label.new()
-	title_label.text = "BÁO CÁO NGÀY"
+	title_label.text = Localization.text("report.title")
 	title_label.add_theme_font_size_override("font_size", 23)
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title_label)
-	var close_button := Button.new()
+	close_button = Button.new()
 	close_button.text = "×"
-	close_button.tooltip_text = "Đóng báo cáo"
+	close_button.tooltip_text = Localization.text("common.close")
 	close_button.pressed.connect(close)
 	header.add_child(close_button)
 	var scroll := ScrollContainer.new()
@@ -44,12 +45,13 @@ func _ready() -> void:
 	scroll.add_child(body_label)
 	get_viewport().size_changed.connect(_clamp_to_viewport)
 	resized.connect(_clamp_to_viewport)
+	Localization.watch(_on_language_changed)
 
 
 func show_result(result: TurnResolutionResult) -> void:
 	has_report = true
 	current_day = result.next_day
-	title_label.text = "BÁO CÁO NGÀY %02d" % result.resolved_day
+	title_label.text = Localization.text("report.day_title", {"day": "%02d" % result.resolved_day})
 	current_entries.clear()
 	for entry in result.report_entries:
 		current_entries.append(entry)
@@ -87,9 +89,15 @@ func _render_sections() -> void:
 			attention.append(entry)
 	attention.sort_custom(func(a: ReportEntry, b: ReportEntry): return a.attention_level > b.attention_level)
 	var sections: Array[String] = []
-	sections.append(_section_text("CẦN CHÚ Ý", attention, "Không có mục chưa đọc."))
-	sections.append(_section_text("TODAY SUMMARY", current_entries, "Chưa nhận được báo cáo hôm nay."))
-	sections.append(_section_text("FULL LOG", full_log_entries, "Chưa có lịch sử báo cáo."))
+	sections.append(_section_text(
+		Localization.text("report.attention"), attention, Localization.text("report.no_attention")
+	))
+	sections.append(_section_text(
+		Localization.text("report.today_summary"), current_entries, Localization.text("report.no_today")
+	))
+	sections.append(_section_text(
+		Localization.text("report.full_log"), full_log_entries, Localization.text("report.no_history")
+	))
 	body_label.text = "\n\n".join(sections)
 
 
@@ -106,22 +114,40 @@ func _section_text(title: String, entries: Array[ReportEntry], empty_text: Strin
 func _entry_text(entry: ReportEntry, current_day: int) -> String:
 	var metadata: Array[String] = []
 	if not entry.source_label.is_empty():
-		metadata.append("Nguồn: %s" % entry.source_label)
-	metadata.append("Độ tin cậy: %s" % _confidence_label(
+		metadata.append(Localization.text("report.source", {"source": entry.source_label}))
+	metadata.append(Localization.text("report.confidence", {"confidence": _confidence_label(
 		entry.confidence, entry.observed_day < current_day - 1
-	))
-	metadata.append("Cập nhật: Ngày %d" % entry.observed_day)
+	)}))
+	metadata.append(Localization.text("report.updated", {"day": entry.observed_day}))
 	return "%s\n%s" % [entry.text, " · ".join(metadata)]
 
 
 func _confidence_label(confidence: int, stale: bool) -> String:
 	if stale:
-		return "Thông tin cũ"
+		return Localization.text("report.stale")
 	if confidence == GameEnums.FactConfidence.CONFIRMED:
-		return "Đã xác nhận"
+		return Localization.text("report.confirmed")
 	if confidence == GameEnums.FactConfidence.REPORTED:
-		return "Theo báo cáo"
-	return "Chưa chắc chắn"
+		return Localization.text("report.reported")
+	return Localization.text("report.uncertain")
+
+
+func refresh_language() -> void:
+	if title_label == null:
+		return
+	if has_report:
+		_render_sections()
+	else:
+		title_label.text = Localization.text("report.title")
+	close_button.tooltip_text = Localization.text("common.close")
+
+
+func _on_language_changed(_locale: String) -> void:
+	refresh_language()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)
 
 
 func _clamp_to_viewport() -> void:

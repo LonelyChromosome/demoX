@@ -10,6 +10,7 @@ var cards := {}
 var card_flow: HFlowContainer
 var hint: Label
 var confirm: Button
+var title_label: Label
 
 
 func _ready() -> void:
@@ -34,10 +35,10 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
 	margin.add_child(box)
-	var title := Label.new()
-	title.text = "PHÂN KHẨU PHẦN"
-	title.add_theme_font_size_override("font_size", 25)
-	box.add_child(title)
+	title_label = Label.new()
+	title_label.text = Localization.text("ration.title")
+	title_label.add_theme_font_size_override("font_size", 25)
+	box.add_child(title_label)
 	hint = Label.new()
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(hint)
@@ -52,9 +53,10 @@ func _ready() -> void:
 	card_flow.add_theme_constant_override("v_separation", 10)
 	scroll.add_child(card_flow)
 	confirm = Button.new()
-	confirm.text = "Xác nhận khẩu phần"
+	confirm.text = Localization.text("ration.confirm")
 	confirm.pressed.connect(_submit)
 	box.add_child(confirm)
+	Localization.watch(_on_language_changed)
 
 
 func show_request(game_state: GameState, result: TurnResolutionResult) -> void:
@@ -96,7 +98,7 @@ func _create_card(unit: UnitState) -> void:
 	content.add_child(main)
 	var hunger := Label.new()
 	hunger.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hunger.text = "Đói %d/3" % unit.hunger_streak
+	hunger.text = Localization.text("ration.hunger", {"days": unit.hunger_streak})
 	hunger.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hunger.add_theme_font_size_override("font_size", 13)
 	hunger.add_theme_color_override("font_color", Color("b9c1bd"))
@@ -133,9 +135,11 @@ func _update_card(unit_id: String) -> void:
 
 
 func _update_hint() -> void:
-	hint.text = "Còn %d khẩu phần · Đã chọn %d/%d\nQuân nhịn đủ 3 ngày chỉ chết sau khi kết thúc ngày đói thứ ba." % [
-		required_count, selected.size(), required_count
-	]
+	hint.text = Localization.text("ration.hint", {
+		"remaining": required_count,
+		"selected": selected.size(),
+		"required": required_count,
+	})
 	confirm.disabled = selected.size() != required_count
 
 
@@ -165,9 +169,9 @@ func _card_style(is_selected: bool, hovered := false) -> StyleBoxFlat:
 
 func _unit_name(unit: UnitState) -> String:
 	if unit.is_prisoner:
-		return "Tù binh %s" % (
+		return Localization.text("ration.prisoner", {"name": (
 			unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
-		)
+		)})
 	return unit.display_name if not unit.display_name.is_empty() else _rank_name(unit.rank)
 
 
@@ -176,4 +180,16 @@ func _glyph(rank: int) -> String:
 
 
 func _rank_name(rank: int) -> String:
-	return ["Tốt", "Mã", "Xe", "Tịnh", "Hậu", "Vua"][rank]
+	return LocalizationKeys.rank_name(rank)
+
+
+func _on_language_changed(_locale: String) -> void:
+	if title_label != null:
+		title_label.text = Localization.text("ration.title")
+		confirm.text = Localization.text("ration.confirm")
+		if visible:
+			_update_hint()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)

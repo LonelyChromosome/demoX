@@ -48,14 +48,20 @@ func create_event(state: GameState, definition_id: String, source := "", target_
 	var event := EventState.new("event_%d" % state.event_sequence)
 	event.definition_id = definition_id
 	event.type = str(definition.get("type", "world"))
-	event.title = str(definition.get("title", "Sự kiện"))
-	event.description = str(definition.get("description", ""))
+	event.title = _definition_text(definition, "title", "common.unknown")
+	event.description = _definition_text(definition, "description", "")
 	event.start_day = state.day
 	event.duration = maxi(1, int(definition.get("duration", _definition_duration(definition))))
 	event.source = source if not source.is_empty() else str(definition.get("source", "World event"))
 	event.target_id = target_id
 	event.tags.assign(definition.get("tags", []))
-	event.choices.assign(definition.get("choices", []))
+	var localized_choices: Array[Dictionary] = []
+	for choice in definition.get("choices", []):
+		var localized_choice: Dictionary = choice.duplicate(true)
+		if localized_choice.has("label_key"):
+			localized_choice.label = Localization.text(str(localized_choice.label_key))
+		localized_choices.append(localized_choice)
+	event.choices.assign(localized_choices)
 	event.follow_up_event_ids.assign(definition.get("follow_up_event_ids", []))
 	event.attention_level = int(definition.get("attention_level", GameEnums.AttentionLevel.NORMAL))
 	if not event.choices.is_empty():
@@ -96,7 +102,7 @@ func advance(state: GameState, result: TurnResolutionResult) -> void:
 		if definition.is_empty():
 			continue
 		if event.status == GameEnums.EventStatus.WAITING_CHOICE and event.chosen_choice.is_empty():
-			_append_report(result, event, "%s đang chờ quyết định của Vua." % event.title)
+			_append_report(result, event, Localization.text("event.waiting_choice", {"title": _event_title(event)}))
 			event.last_advanced_day = state.day
 			continue
 		var stages: Array = definition.get("stages", [])
@@ -145,7 +151,7 @@ func _spawn_triggered_events(state: GameState, result: TurnResolutionResult) -> 
 			target_id = str(group_ids[0]) if not group_ids.is_empty() else ""
 		var event := create_event(state, definition_id, str(definition.get("source", "")), target_id)
 		if event != null:
-			_append_report(result, event, event.description)
+			_append_report(result, event, _definition_text(definition, "description", "", event.description))
 
 
 func _apply_effect_list(
@@ -187,7 +193,8 @@ func _resolve_event(state: GameState, event: EventState, definition: Dictionary,
 		state.resolved_event_definition_ids.append(event.definition_id)
 	if state.active_event_id == event.id:
 		state.active_event_id = ""
-	_append_report(result, event, str(definition.get("resolution_text", "%s đã khép lại." % event.title)))
+	var fallback := Localization.text("event.closed", {"title": _event_title(event)})
+	_append_report(result, event, _definition_text(definition, "resolution_text", "", fallback))
 	for follow_up_id in event.follow_up_event_ids:
 		if definitions.has(follow_up_id) and not _has_definition_active(state, follow_up_id):
 			create_event(state, follow_up_id, event.source, event.target_id)
@@ -232,76 +239,76 @@ func _register_core_handlers() -> void:
 
 func _register_default_definitions() -> void:
 	register_definition({
-		"id": "refugee_waiting", "type": "refugee", "title": "Những quân cờ ngoài cổng",
-		"description": "Một nhóm nạn dân vẫn chờ bên ngoài thành.", "duration": 3,
+		"id": "refugee_waiting", "type": "refugee", "title_key": "event.refugee_waiting.title",
+		"description_key": "event.refugee_waiting.description", "duration": 3,
 		"condition": "outsider_present", "source": "Refugee camp",
 		"attention_level": GameEnums.AttentionLevel.IMPORTANT, "tags": ["refugee", "multi_day"],
 		"choices": [
-			{"id": "support", "label": "Tiếp tục hỗ trợ", "effects": [
+			{"id": "support", "label_key": "event.refugee_waiting.support", "effects": [
 				{"handler": "outsider_pressure", "amount": -1},
 				{"handler": "remember", "kind": "refugee_supported"},
 			]},
-			{"id": "wait", "label": "Để họ tiếp tục chờ", "effects": [
+			{"id": "wait", "label_key": "event.refugee_waiting.wait", "effects": [
 				{"handler": "outsider_pressure", "amount": 1},
 				{"handler": "remember", "kind": "refugee_pressure"},
 			]},
 		],
 		"stages": [
-			{"effects": [{"handler": "report", "text": "Các quân Tốt ngoài cổng đã dựng chỗ trú tạm."}]},
-			{"effects": [{"handler": "report", "text": "Lương thực và sự chờ đợi đang đè lên khu nạn dân."}]},
-			{"effects": [{"handler": "report", "text": "Nhóm nạn dân cần một quyết định lâu dài."}]},
+			{"effects": [{"handler": "report", "text_key": "event.refugee_waiting.stage1"}]},
+			{"effects": [{"handler": "report", "text_key": "event.refugee_waiting.stage2"}]},
+			{"effects": [{"handler": "report", "text_key": "event.refugee_waiting.stage3"}]},
 		], "follow_up_event_ids": ["refugee_aftercare"],
-		"resolution_text": "Khu nạn dân đã bước sang một trạng thái mới."
+		"resolution_text_key": "event.refugee_waiting.resolution"
 	})
 	register_definition({
-		"id": "refugee_aftercare", "type": "refugee", "title": "Tin từ khu nạn dân",
-		"description": "Quyết định trước đó đang để lại hệ quả.", "duration": 1,
+		"id": "refugee_aftercare", "type": "refugee", "title_key": "event.refugee_aftercare.title",
+		"description_key": "event.refugee_aftercare.description", "duration": 1,
 		"condition": "never", "source": "Refugee camp",
 		"attention_level": GameEnums.AttentionLevel.NOTICE, "tags": ["refugee", "follow_up"],
-		"stages": [{"effects": [{"handler": "report", "text": "Khu nạn dân đã phản hồi quyết định của thành."}]}],
-		"resolution_text": "Tin tiếp nối từ khu nạn dân đã được ghi nhận."
+		"stages": [{"effects": [{"handler": "report", "text_key": "event.refugee_aftercare.stage1"}]}],
+		"resolution_text_key": "event.refugee_aftercare.resolution"
 	})
 	register_definition({
-		"id": "forest_signs", "type": "forest", "title": "Dấu hiệu trong rừng",
-		"description": "Người gác cổng báo có dấu vết lạ phía rừng.", "duration": 2,
+		"id": "forest_signs", "type": "forest", "title_key": "event.forest_signs.title",
+		"description_key": "event.forest_signs.description", "duration": 2,
 		"condition": "forest_signal", "source": "Forest",
 		"attention_level": GameEnums.AttentionLevel.NOTICE, "tags": ["forest", "encounter"],
 		"choices": [
-			{"id": "observe", "label": "Tiếp tục quan sát", "effects": [{"handler": "remember", "kind": "forest_observed"}]},
-			{"id": "ignore", "label": "Không điều tra", "effects": [{"handler": "remember", "kind": "forest_ignored"}]},
+			{"id": "observe", "label_key": "event.forest_signs.observe", "effects": [{"handler": "remember", "kind": "forest_observed"}]},
+			{"id": "ignore", "label_key": "event.forest_signs.ignore", "effects": [{"handler": "remember", "kind": "forest_ignored"}]},
 		],
 		"stages": [
-			{"effects": [{"handler": "report", "text": "Những dấu vết chưa đủ để kết luận."}]},
-			{"effects": [{"handler": "report", "text": "Báo cáo từ rừng đã được gửi về thành."}]},
-		], "resolution_text": "Tin từ rừng đã được ghi vào sổ theo dõi."
+			{"effects": [{"handler": "report", "text_key": "event.forest_signs.stage1"}]},
+			{"effects": [{"handler": "report", "text_key": "event.forest_signs.stage2"}]},
+		], "resolution_text_key": "event.forest_signs.resolution"
 	})
 	register_definition({
-		"id": "wasteland_work", "type": "wasteland", "title": "Khai phá Đất hoang",
-		"description": "Công việc ngoài rìa thành đang tiếp diễn.", "duration": 2,
+		"id": "wasteland_work", "type": "wasteland", "title_key": "event.wasteland_work.title",
+		"description_key": "event.wasteland_work.description", "duration": 2,
 		"condition": "wasteland_active", "source": "Wasteland",
 		"attention_level": GameEnums.AttentionLevel.NORMAL, "tags": ["wasteland", "development"],
 		"stages": [
-			{"effects": [{"handler": "report", "text": "Những ô đất đầu tiên đã được dọn sạch."}]},
-			{"effects": [{"handler": "report", "text": "Đường vào khu khai phá đã thành hình."}]},
+			{"effects": [{"handler": "report", "text_key": "event.wasteland_work.stage1"}]},
+			{"effects": [{"handler": "report", "text_key": "event.wasteland_work.stage2"}]},
 		], "follow_up_event_ids": ["wasteland_incident"],
-		"resolution_text": "Đợt công việc tại Đất hoang đã được ghi nhận."
+		"resolution_text_key": "event.wasteland_work.resolution"
 	})
 	register_definition({
-		"id": "wasteland_incident", "type": "wasteland", "title": "Trở ngại ở Đất hoang",
-		"description": "Đội khai phá gặp một đoạn nền đất không ổn định.", "duration": 2,
+		"id": "wasteland_incident", "type": "wasteland", "title_key": "event.wasteland_incident.title",
+		"description_key": "event.wasteland_incident.description", "duration": 2,
 		"condition": "never", "source": "Wasteland",
 		"attention_level": GameEnums.AttentionLevel.NOTICE, "tags": ["wasteland", "incident"],
 		"choices": [
-			{"id": "reinforce", "label": "Gia cố lối đi", "effects": [{"handler": "remember", "kind": "wasteland_reinforced"}]},
-			{"id": "reroute", "label": "Đi đường vòng", "effects": [
+			{"id": "reinforce", "label_key": "event.wasteland_incident.reinforce", "effects": [{"handler": "remember", "kind": "wasteland_reinforced"}]},
+			{"id": "reroute", "label_key": "event.wasteland_incident.reroute", "effects": [
 				{"handler": "wasteland_delay", "days": 1},
 				{"handler": "remember", "kind": "wasteland_rerouted"},
 			]},
 		],
 		"stages": [
-			{"effects": [{"handler": "report", "text": "Đội khai phá đang đánh giá đoạn đất yếu."}]},
-			{"effects": [{"handler": "report", "text": "Lối làm việc mới đã được ổn định."}]},
-		], "resolution_text": "Trở ngại tại Đất hoang đã được xử lý."
+			{"effects": [{"handler": "report", "text_key": "event.wasteland_incident.stage1"}]},
+			{"effects": [{"handler": "report", "text_key": "event.wasteland_incident.stage2"}]},
+		], "resolution_text_key": "event.wasteland_incident.resolution"
 	})
 
 
@@ -312,7 +319,8 @@ func _forest_signal_condition(state: GameState, _definition: Dictionary) -> bool
 
 
 func _effect_report(_state: GameState, event: EventState, effect: Dictionary, result: TurnResolutionResult) -> void:
-	_append_report(result, event, str(effect.get("text", event.description)))
+	var text := Localization.text(str(effect.text_key)) if effect.has("text_key") else str(effect.get("text", event.description))
+	_append_report(result, event, text)
 
 
 func _effect_outsider_pressure(state: GameState, event: EventState, effect: Dictionary, _result: TurnResolutionResult) -> void:
@@ -330,3 +338,19 @@ func _effect_remember(state: GameState, event: EventState, effect: Dictionary, _
 	var kind := str(effect.get("kind", "event_choice"))
 	event.remember(kind, state.day)
 	state.remember("%s: %s" % [event.title, kind], kind)
+
+
+func _definition_text(
+	definition: Dictionary, field: String, default_key: String, fallback := ""
+) -> String:
+	var key_field := "%s_key" % field
+	if definition.has(key_field):
+		return Localization.text(str(definition[key_field]))
+	if definition.has(field):
+		return str(definition[field])
+	return Localization.text(default_key) if not default_key.is_empty() else fallback
+
+
+func _event_title(event: EventState) -> String:
+	var definition: Dictionary = definitions.get(event.definition_id, {})
+	return _definition_text(definition, "title", "", event.title)

@@ -118,10 +118,4 @@ func attention_for(level: GameEnums.RebellionLevel) -> GameEnums.AttentionLevel:
 
 
 func level_label(level: GameEnums.RebellionLevel) -> String:
-	return [
-		"Bất mãn",
-		"Giảm hiệu suất",
-		"Phản đối nhưng phục tùng",
-		"Kháng lệnh",
-		"Nổi loạn",
-	][level] if level >= GameEnums.RebellionLevel.DISSATISFIED else "Ổn định"
+	return LocalizationKeys.rebellion_name(level)

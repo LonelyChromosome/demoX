@@ -176,6 +176,7 @@ func _cleanup_deaths(
 				candidate.prisoner_labor = maxi(0, candidate.prisoner_labor - 1)
 			candidate.job_slots.erase(unit.board_cell)
 		state.prisoners.erase(unit.id)
+		state.record_death(unit, "starvation")
 		state.units.erase(unit.id)
 		result.starved_unit_ids.append(unit.id)
 
