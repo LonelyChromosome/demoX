@@ -13,11 +13,11 @@ signal staffing_workers_requested
 signal staffing_cancel_requested
 
 const BUILDINGS := [
-	["Nông trại", GameEnums.BuildingType.FARM],
-	["Xưởng vật tư", GameEnums.BuildingType.MATERIAL_WORKSHOP],
-	["Nhà giam", GameEnums.BuildingType.PRISON],
-	["Y xá", GameEnums.BuildingType.INFIRMARY],
-	["Doanh trại", GameEnums.BuildingType.BARRACKS],
+	["building.farm", GameEnums.BuildingType.FARM],
+	["building.workshop", GameEnums.BuildingType.MATERIAL_WORKSHOP],
+	["building.prison", GameEnums.BuildingType.PRISON],
+	["building.infirmary", GameEnums.BuildingType.INFIRMARY],
+	["building.barracks", GameEnums.BuildingType.BARRACKS],
 ]
 
 var status_label: Label
@@ -32,65 +32,65 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 8)
 
 	var title := Label.new()
-	title.text = "CÔNG TRÌNH 3×3"
+	title.text = Localization.text("building.palette.title")
 	title.add_theme_font_size_override("font_size", 22)
 	add_child(title)
 
 	var hint := Label.new()
-	hint.text = "Ô lõi ở giữa, 8 ô vận hành xung quanh"
+	hint.text = Localization.text("building.palette.hint")
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(hint)
 
 	for entry in BUILDINGS:
 		var button := Button.new()
-		button.text = entry[0]
+		button.text = Localization.text(entry[0])
 		button.toggle_mode = true
 		button.pressed.connect(_on_building_pressed.bind(entry[1]))
 		buttons[entry[1]] = button
 		add_child(button)
 
 	var builders_title := Label.new()
-	builders_title.text = "THỢ XÂY"
+	builders_title.text = Localization.text("building.palette.builders")
 	builders_title.add_theme_font_size_override("font_size", 18)
 	add_child(builders_title)
 	builder_status_label = Label.new()
-	builder_status_label.text = "Đã chọn 0 thợ xây"
+	builder_status_label.text = Localization.text("building.palette.builder_count", {"count": 0})
 	add_child(builder_status_label)
 
 	var cancel_button := Button.new()
-	cancel_button.text = "Hủy công trình dự kiến"
+	cancel_button.text = Localization.text("building.palette.cancel_plan")
 	cancel_button.pressed.connect(func() -> void: cancel_requested.emit())
 	add_child(cancel_button)
 	var cancel_construction_button := Button.new()
-	cancel_construction_button.text = "Hủy xây hiện tại"
+	cancel_construction_button.text = Localization.text("building.palette.cancel_current")
 	cancel_construction_button.pressed.connect(func() -> void: cancel_construction_requested.emit())
 	add_child(cancel_construction_button)
 	var reassign_button := Button.new()
-	reassign_button.text = "Gán thợ xây đã chọn"
+	reassign_button.text = Localization.text("building.palette.assign_builder")
 	reassign_button.pressed.connect(func() -> void: reassign_builder_requested.emit())
 	add_child(reassign_button)
 	var demolition_button := Button.new()
-	demolition_button.text = "Phá công trình đang hoạt động"
+	demolition_button.text = Localization.text("building.palette.demolish")
 	demolition_button.pressed.connect(func() -> void: demolition_requested.emit())
 	add_child(demolition_button)
 	var demolition_cancel_button := Button.new()
-	demolition_cancel_button.text = "Hủy lệnh phá"
+	demolition_cancel_button.text = Localization.text("building.palette.cancel_demolition")
 	demolition_cancel_button.pressed.connect(func() -> void: demolition_cancel_requested.emit())
 	add_child(demolition_cancel_button)
 	var staffing_title := Label.new()
-	staffing_title.text = "PHÂN CÔNG"
+	staffing_title.text = Localization.text("building.palette.staffing")
 	staffing_title.add_theme_font_size_override("font_size", 18)
 	add_child(staffing_title)
 	var manager_button := Button.new()
-	manager_button.text = "Gán quân đã chọn làm quản lý"
+	manager_button.text = Localization.text("building.palette.assign_manager")
 	manager_button.pressed.connect(func() -> void: staffing_manager_requested.emit())
 	add_child(manager_button)
 	var worker_button := Button.new()
-	worker_button.text = "Gán quân đã chọn làm lao động"
+	worker_button.text = Localization.text("building.palette.assign_worker")
 	worker_button.pressed.connect(func() -> void: staffing_workers_requested.emit())
 	add_child(worker_button)
 	var staffing_cancel_button := Button.new()
-	staffing_cancel_button.text = "Hủy phân công dự kiến"
+	staffing_cancel_button.text = Localization.text("building.palette.cancel_staffing")
 	staffing_cancel_button.pressed.connect(func() -> void: staffing_cancel_requested.emit())
 	add_child(staffing_cancel_button)
 	staffing_status_label = Label.new()
@@ -98,7 +98,7 @@ func _ready() -> void:
 	add_child(staffing_status_label)
 
 	status_label = Label.new()
-	status_label.text = "Chọn một loại công trình"
+	status_label.text = Localization.text("building.palette.choose")
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.custom_minimum_size.y = 70
 	add_child(status_label)
@@ -121,7 +121,7 @@ func set_status(text: String) -> void:
 
 func set_builder_status(count: int) -> void:
 	if builder_status_label != null:
-		builder_status_label.text = "Đã chọn %d thợ xây" % count
+		builder_status_label.text = Localization.text("building.palette.builder_count", {"count": count})
 
 
 func set_staffing_status(text: String) -> void:
@@ -141,7 +141,10 @@ func set_available_builders(units: Dictionary) -> void:
 		):
 			continue
 		var button := Button.new()
-		button.text = "%s (%s)" % [unit.display_name if not unit.display_name.is_empty() else unit.id, "thợ xây"]
+		button.text = "%s (%s)" % [
+			unit.display_name if not unit.display_name.is_empty() else unit.id,
+			Localization.text("building.palette.builder_role"),
+		]
 		button.toggle_mode = true
 		button.pressed.connect(_emit_builder_selection)
 		builder_buttons[unit.id] = button

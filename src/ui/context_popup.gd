@@ -12,6 +12,7 @@ var confirm_button: Button
 var selected_action := ""
 var anchor_position := Vector2.ZERO
 var confirm_enabled_for_menu := true
+var cancel_button: Button
 
 
 func _ready() -> void:
@@ -37,16 +38,31 @@ func _ready() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	action_row.add_child(spacer)
 	confirm_button = Button.new()
-	confirm_button.text = "Xác nhận"
+	confirm_button.text = Localization.text("common.confirm")
 	confirm_button.disabled = true
 	confirm_button.pressed.connect(_confirm)
 	action_row.add_child(confirm_button)
-	var cancel_button := Button.new()
+	cancel_button = Button.new()
 	cancel_button.text = "×"
-	cancel_button.tooltip_text = "Đóng"
+	cancel_button.tooltip_text = Localization.text("common.close")
 	cancel_button.custom_minimum_size = Vector2(38, 32)
 	cancel_button.pressed.connect(close)
 	action_row.add_child(cancel_button)
+	Localization.watch(_on_language_changed)
+
+
+func refresh_language() -> void:
+	if confirm_button != null:
+		confirm_button.text = Localization.text("common.confirm")
+		cancel_button.tooltip_text = Localization.text("common.close")
+
+
+func _on_language_changed(_locale: String) -> void:
+	refresh_language()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)
 
 
 func open_at(

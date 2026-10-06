@@ -2,7 +2,7 @@ extends Control
 
 const DEV_MODE := false
 
-var game_state := GameState.new()
+var game_state: GameState
 var turn_manager := TurnManager.new()
 var board: BoardView
 var board_controller: BoardController
@@ -15,6 +15,8 @@ var report_panel: ReportPanel
 var outside_rail: OutsideRail
 var perimeter_view: PerimeterView
 var world_panel: WorldPanel
+var onboarding_panel: OnboardingHintPanel
+var ending_panel: EndingPanel
 var day_label: Label
 var resource_label: Label
 var world_indicator_label: Label
@@ -22,11 +24,17 @@ var visual_transition := false
 var status_label: Label
 var resource_delta_label: Label
 var world_system := WorldSystem.new()
+var onboarding_system := OnboardingSystem.new()
+var undo_button: Button
+var report_button: Button
+var world_button: Button
+var end_button: Button
 
 
 func _ready() -> void:
+	Localization.load_saved_language()
+	game_state = GameSession.start_new_game()
 	_build_shell()
-	_seed_day_one()
 	turn_manager.setup(game_state)
 	add_child(turn_manager)
 	board_controller = BoardController.new()
@@ -50,6 +58,11 @@ func _ready() -> void:
 	turn_manager.resolution_finished.connect(_on_resolution_finished)
 	turn_manager.ration_requested.connect(_on_ration_requested)
 	ration_overlay.submitted.connect(_on_ration_submitted)
+	onboarding_panel.next_requested.connect(_on_onboarding_next)
+	onboarding_panel.skip_requested.connect(_on_onboarding_skip)
+	Localization.watch(_on_language_changed)
+	_show_onboarding_hint(onboarding_system.start(game_state))
+	_refresh_localized_controls()
 	_refresh_header()
 
 
@@ -89,24 +102,19 @@ func _build_shell() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(spacer)
 
-	var undo_button := Button.new()
-	undo_button.text = "Đóng / Bỏ chọn"
-	undo_button.tooltip_text = "Đóng bảng hoặc bỏ thao tác tạm thời; không hủy lệnh đã định"
+	undo_button = Button.new()
 	undo_button.pressed.connect(_undo_current)
 	top.add_child(undo_button)
 
-	var report_button := Button.new()
-	report_button.text = "Báo cáo"
+	report_button = Button.new()
 	report_button.pressed.connect(_toggle_report)
 	top.add_child(report_button)
 
-	var world_button := Button.new()
-	world_button.text = "Thế giới"
+	world_button = Button.new()
 	world_button.pressed.connect(_toggle_world)
 	top.add_child(world_button)
 
-	var end_button := Button.new()
-	end_button.text = "Kết thúc ngày"
+	end_button = Button.new()
 	end_button.pressed.connect(_end_day)
 	top.add_child(end_button)
 
@@ -144,30 +152,10 @@ func _build_shell() -> void:
 	add_child(context_popup)
 	ration_overlay = RationOverlay.new()
 	add_child(ration_overlay)
-
-
-func _seed_day_one() -> void:
-	game_state.food = 4
-	game_state.materials = 3
-	_spawn_piece("king", "Vua", GameEnums.Rank.KING, Vector2i(4, 7))
-	_spawn_piece("rook", "Xe", GameEnums.Rank.ROOK, Vector2i(0, 7))
-	_spawn_piece("knight", "Mã", GameEnums.Rank.KNIGHT, Vector2i(1, 7))
-	_spawn_piece("pawn_d", "Tốt D", GameEnums.Rank.PAWN, Vector2i(3, 6))
-	_spawn_piece("pawn_e", "Tốt E", GameEnums.Rank.PAWN, Vector2i(4, 6))
-
-
-func _spawn_piece(unit_id: String, unit_name: String, rank: GameEnums.Rank, cell: Vector2i) -> void:
-	var unit := UnitState.new(unit_id)
-	unit.display_name = unit_name
-	unit.rank = rank
-	unit.board_cell = cell
-	unit.backstory.append("Sống sót sau những ngày thành trì mất màu.")
-	unit.backstory.append("Được Vua tập hợp lại tại %s." % _cell_name(cell))
-	game_state.units[unit.id] = unit
-
-
-func _cell_name(cell: Vector2i) -> String:
-	return "%s%d" % [String.chr(65 + cell.x), 8 - cell.y]
+	onboarding_panel = OnboardingHintPanel.new()
+	add_child(onboarding_panel)
+	ending_panel = EndingPanel.new()
+	add_child(ending_panel)
 
 
 func _undo_current() -> void:
@@ -194,9 +182,11 @@ func _toggle_world() -> void:
 
 
 func _end_day() -> void:
-	if not visual_transition and not game_state.game_over and game_state.day < GameState.MAX_DAYS:
+	if not visual_transition and turn_manager.can_edit_orders():
 		visual_transition = true
-		turn_manager.end_day()
+		var result := turn_manager.end_day()
+		if result == null:
+			visual_transition = false
 
 
 func _on_day_started(_day: int) -> void:
@@ -208,14 +198,21 @@ func _on_resolution_finished(result: TurnResolutionResult) -> void:
 	report_panel.show_result(result)
 	_show_resource_delta(result)
 	if game_state.game_over:
-		status_label.text = "THẤT BẠI: %s" % game_state.failure_reason
+		var failure_reason := (
+			Localization.text(game_state.failure_reason_key, game_state.failure_reason_args)
+			if not game_state.failure_reason_key.is_empty()
+			else game_state.failure_reason
+		)
+		status_label.text = Localization.text("game.failure", {"reason": failure_reason})
 	elif not result.starved_unit_ids.is_empty():
 		var names: Array[String] = []
 		for unit_id in result.starved_unit_ids:
 			names.append(result.starved_unit_names.get(unit_id, "một quân cờ"))
-		status_label.text = "Chết đói: %s" % ", ".join(names)
+		status_label.text = Localization.text("game.starved", {"names": ", ".join(names)})
 	else:
-		status_label.text = "Đã giải quyết ngày %02d" % result.resolved_day
+		status_label.text = Localization.text("game.resolved_day", {"day": "%02d" % result.resolved_day})
+	if result.ending_triggered:
+		ending_panel.show_ending(game_state)
 
 
 func _on_ration_requested(result: TurnResolutionResult) -> void:
@@ -242,9 +239,15 @@ func _show_resource_delta(result: TurnResolutionResult) -> void:
 	)
 	var parts: Array[String] = []
 	if food_delta != 0:
-		parts.append("Lương thực %s%d" % ["+" if food_delta > 0 else "", food_delta])
+		parts.append(Localization.text("game.resource_delta", {
+			"resource": Localization.text("game.food"),
+			"delta": "%s%d" % ["+" if food_delta > 0 else "", food_delta],
+		}))
 	if material_delta != 0:
-		parts.append("Vật tư %s%d" % ["+" if material_delta > 0 else "", material_delta])
+		parts.append(Localization.text("game.resource_delta", {
+			"resource": Localization.text("game.materials"),
+			"delta": "%s%d" % ["+" if material_delta > 0 else "", material_delta],
+		}))
 	resource_delta_label.text = "   " + " · ".join(parts) if not parts.is_empty() else ""
 	resource_delta_label.modulate.a = 1.0
 	if not parts.is_empty():
@@ -256,15 +259,105 @@ func _on_placement_mode_changed(active: bool) -> void:
 
 
 func _refresh_header() -> void:
-	day_label.text = "NGÀY %02d / %02d" % [game_state.day, GameState.MAX_DAYS]
+	day_label.text = Localization.text("game.day_counter", {
+		"day": "%02d" % game_state.day, "max_day": "%02d" % GameState.MAX_DAYS,
+	})
 	# Kho trung tâm là thông tin player quản lý trực tiếp, nên header được phép hiện số chính xác.
-	resource_label.text = "   Lương thực %d   ·   Vật tư %d" % [game_state.food, game_state.materials]
+	resource_label.text = Localization.text("game.resources", {
+		"food": game_state.food, "materials": game_state.materials,
+	})
 	var world := world_system.ensure_initialized(game_state)
-	world_indicator_label.text = "   Mùa %s · %s" % [
-		world_system.season_label(world.season),
-		world_system.weather_label(world.weather),
-	]
+	world_indicator_label.text = Localization.text("game.season_weather", {
+		"season": world_system.season_label(world.season),
+		"weather": world_system.weather_label(world.weather),
+	})
 	board.set_day(game_state.day, game_state.day > 1)
+
+
+func set_language(locale: String) -> bool:
+	return GameSession.set_language(locale)
+
+
+func current_language() -> String:
+	return GameSession.current_language()
+
+
+func start_onboarding() -> Dictionary:
+	var hint := onboarding_system.start(game_state)
+	_show_onboarding_hint(hint)
+	return hint
+
+
+func skip_onboarding() -> void:
+	onboarding_system.skip(game_state)
+	_show_onboarding_hint({})
+
+
+func onboarding_state() -> Dictionary:
+	return onboarding_system.snapshot(game_state)
+
+
+func ending_recap() -> Dictionary:
+	return EndingSystem.new().localized_recap(game_state)
+
+
+func _on_onboarding_next() -> void:
+	_show_onboarding_hint(onboarding_system.dismiss_current(game_state))
+
+
+func _on_onboarding_skip() -> void:
+	skip_onboarding()
+
+
+func _show_onboarding_hint(hint: Dictionary) -> void:
+	onboarding_panel.show_hint(hint)
+	resource_label.modulate = Color.WHITE
+	report_button.modulate = Color.WHITE
+	outside_rail.modulate = Color.WHITE
+	end_button.modulate = Color.WHITE
+	if board != null:
+		board.present_context_target()
+	if hint.is_empty():
+		return
+	var emphasis := Color("ffe09a")
+	match str(hint.target):
+		"king":
+			board.present_context_target("king")
+		"unit":
+			board.present_context_target("pawn_d")
+		"resources":
+			resource_label.modulate = emphasis
+		"report":
+			report_button.modulate = emphasis
+		"perimeter":
+			outside_rail.modulate = emphasis
+		"end_day":
+			end_button.modulate = emphasis
+
+
+func _on_language_changed(_locale: String) -> void:
+	for unit_id in ["king", "rook", "knight", "pawn_d", "pawn_e"]:
+		var unit := game_state.units.get(unit_id) as UnitState
+		if unit != null:
+			unit.display_name = Localization.text("unit.seed.%s" % unit_id)
+	_refresh_localized_controls()
+	_refresh_header()
+	if contextual_controller != null:
+		contextual_controller.refresh()
+
+
+func _refresh_localized_controls() -> void:
+	undo_button.text = Localization.text("game.undo")
+	undo_button.tooltip_text = Localization.text("game.undo_hint")
+	report_button.text = Localization.text("game.report")
+	world_button.text = Localization.text("game.world")
+	end_button.text = Localization.text("game.end_day")
+	context_popup.refresh_language()
+	report_panel.refresh_language()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)
 
 
 func _unhandled_input(event: InputEvent) -> void:

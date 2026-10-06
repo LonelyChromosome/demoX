@@ -106,6 +106,7 @@ func commit_actions(
 		elif order.action == GameEnums.PrisonerAction.KILL:
 			var name := _unit_name(unit)
 			_cleanup_prison_membership(state, unit)
+			state.record_death(unit, "execution")
 			state.units.erase(unit.id)
 			result.prison_events.append({"kind": "killed", "unit_name": name})
 		elif order.action == GameEnums.PrisonerAction.SUBMIT:

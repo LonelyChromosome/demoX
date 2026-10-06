@@ -17,6 +17,7 @@ var relationship_system := RelationshipSystem.new()
 var loyalty_system := LoyaltySystem.new()
 var perimeter_system := PerimeterSystem.new()
 var ruin_system := RuinSystem.new()
+var ending_system := EndingSystem.new()
 
 enum Phase {
 	VALIDATE_ORDERS,
@@ -184,12 +185,17 @@ func _finish_resolution(
 	_run_phase(Phase.FINALIZE_DAY, result)
 	prison_system.finalize_day(state)
 	state.day_one_full_knowledge = false
-	if not state.game_over and state.day < GameState.MAX_DAYS:
+	if not state.game_over and state.day >= GameState.MAX_DAYS:
+		result.ending_triggered = ending_system.finalize_run(state)
+		if result.ending_triggered:
+			result.ending_recap = ending_system.localized_recap(state)
+	elif not state.game_over:
 		state.day += 1
 	result.next_day = state.day
 
 	_run_phase(Phase.START_NEXT_DAY, result)
-	_start_next_day(state, result)
+	if not state.run_ended and not state.game_over:
+		_start_next_day(state, result)
 
 
 func _apply_loyalty_outcomes(

@@ -10,10 +10,10 @@ const PIECE_GLYPHS := {
 	GameEnums.Rank.QUEEN: "♛",
 	GameEnums.Rank.KING: "♚",
 }
-const ZONE_TITLES := {
-	"refugee": "KHU TỊ NẠN",
-	"forest": "RỪNG NGOẠI VI",
-	"wasteland": "ĐẤT HOANG",
+const ZONE_TITLE_KEYS := {
+	"refugee": "perimeter.refugee",
+	"forest": "perimeter.forest",
+	"wasteland": "perimeter.wasteland",
 }
 const ZONE_COLORS := {
 	"refugee": Color("a77d4f"),
@@ -31,6 +31,7 @@ var snapshot: Dictionary = {}
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(_layout_board)
+	Localization.watch(_on_language_changed)
 	queue_redraw()
 
 
@@ -62,7 +63,7 @@ func build_snapshot() -> Dictionary:
 		zones[zone_id] = {
 			"id": zone_id,
 			"anchor": layout.anchor_for(zone_id),
-			"title": ZONE_TITLES[zone_id],
+			"title": Localization.text(ZONE_TITLE_KEYS[zone_id]),
 			"status": "",
 			"pieces": [],
 			"count": 0,
@@ -142,7 +143,7 @@ func _populate_refugees(zone: Dictionary, rendered: Dictionary) -> void:
 				continue
 			_add_piece(zone, rendered, escort, escort.rank, "escort")
 	zone.count = zone.pieces.size()
-	zone.status = "Không có nhóm đang chờ" if statuses.is_empty() else " · ".join(statuses)
+	zone.status = Localization.text("perimeter.no_refugees") if statuses.is_empty() else " · ".join(statuses)
 
 
 func _populate_forest(zone: Dictionary, rendered: Dictionary) -> void:
@@ -165,19 +166,19 @@ func _populate_forest(zone: Dictionary, rendered: Dictionary) -> void:
 				continue
 			_add_piece(zone, rendered, unit, unit.rank, "expedition")
 	zone.count = zone.pieces.size()
-	zone.status = "Yên tĩnh" if statuses.is_empty() else " · ".join(statuses)
+	zone.status = Localization.text("perimeter.quiet") if statuses.is_empty() else " · ".join(statuses)
 
 
 func _populate_wasteland(zone: Dictionary, rendered: Dictionary) -> void:
 	var project := state.wasteland
 	if project.active:
-		zone.status = "Đang khai phá · còn %d ngày" % project.days_left
+		zone.status = Localization.text("perimeter.developing", {"days": project.days_left})
 		zone.progress = 1.0 - float(project.days_left) / maxf(1.0, project.duration_days)
 	elif project.completed:
-		zone.status = "Hoàn tất · sẵn sàng tái định cư"
+		zone.status = Localization.text("perimeter.complete")
 		zone.progress = 1.0
 	else:
-		zone.status = "Chưa khai phá"
+		zone.status = Localization.text("perimeter.not_started")
 	for unit_id in project.participant_unit_ids:
 		var unit := state.units.get(unit_id) as UnitState
 		if (
@@ -214,18 +215,20 @@ func _is_board_cell(cell: Vector2i) -> bool:
 
 func _refugee_status(group: OutsiderGroupState) -> String:
 	if group.is_resettling():
-		return "tái định cư %d ngày" % group.resettlement_days_left
+		return Localization.text("perimeter.resettling", {"days": group.resettlement_days_left})
 	if group.support_active and not group.support_unmet:
-		return "được hỗ trợ"
-	return ["ổn định", "bất an", "căng thẳng", "hỗn loạn"][group.pressure]
+		return Localization.text("perimeter.supported")
+	return Localization.text([
+		"perimeter.stable", "perimeter.uneasy", "perimeter.tense", "perimeter.chaos",
+	][group.pressure])
 
 
 func _expedition_status(expedition: ExpeditionState) -> String:
 	if expedition.status == GameEnums.ExpeditionStatus.RETURN_PENDING:
-		return "chờ chỗ trở về"
+		return Localization.text("outside.return_wait")
 	if expedition.days_left <= 0:
-		return "đang trở về"
-	return "thám hiểm · còn %d ngày" % expedition.days_left
+		return Localization.text("perimeter.returning")
+	return Localization.text("perimeter.exploring", {"days": expedition.days_left})
 
 
 func _layout_board() -> void:
@@ -253,9 +256,17 @@ func _draw_city_frame() -> void:
 	draw_rect(center, Color(0.58, 0.49, 0.31, 0.42), false, 1.5)
 	var font := get_theme_default_font()
 	draw_string(
-		font, Vector2(center.get_center().x - 42.0, 73.0), "NỘI THÀNH",
+		font, Vector2(center.get_center().x - 42.0, 73.0), Localization.text("perimeter.city"),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.77, 0.72, 0.58, 0.62)
 	)
+
+
+func _on_language_changed(_locale: String) -> void:
+	refresh()
+
+
+func _exit_tree() -> void:
+	Localization.unwatch(_on_language_changed)
 
 
 func route_segments() -> Array[Dictionary]:
